@@ -7,6 +7,14 @@ project(point-cloud-dump)
 # mandatory use of these packages
 find_package(YARP REQUIRED)
 find_package(ICUBcontrib REQUIRED)
+find_package(PCL REQUIRED)
+
+# add PCL library
+include_directories(${PCL_INCLUDE_DIRS} )
+link_directories(${PCL_LIBRARY_DIRS} )
+
+# Fix some PCL bug related to Ubuntu
+list(REMOVE_ITEM PCL_LIBRARIES "vtkproj4")
 
 # extend the current search path used by cmake to load helpers
 list(APPEND CMAKE_MODULE_PATH ${YARP_MODULE_PATH})
@@ -20,9 +28,10 @@ include(ICUBcontribOptions)
 # specify to install in $ICUBcontrib_DIR/bin
 icubcontrib_set_default_prefix()
 
+
 include_directories(${YARP_INCLUDE_DIRS} ${CMAKE_SOURCE_DIR}/src)
 add_executable(${PROJECT_NAME} ${CMAKE_SOURCE_DIR}/src/main.cpp)
-target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} ${PCL_LIBRARIES})
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 
 # generate ad-hoc project to perform "make uninstall"
