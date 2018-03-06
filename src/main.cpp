@@ -11,6 +11,8 @@
 #include <yarp/sig/all.h>
 #include <yarp/dev/all.h>
 #include <yarp/math/Math.h>
+#include <pcl/io/pcd_io.h>
+#include <yarp/pcl/Pcl.h>
 
 #include <string>
 
@@ -33,7 +35,7 @@ protected:
 
     Mutex mutex;
 
-    string moduleName, operationMode, objectToFind;
+    string moduleName, operationMode, objectToFind, baseDumpFileName;
 
     bool retrieveObjectBoundingBox(const string objName, Vector &top_left_xy, Vector &bot_right_xy)
     {
@@ -185,6 +187,7 @@ public:
          *
          */
         objectToFind = "Car";
+        baseDumpFileName = "point_cloud";
 
         bool okOpen = true;
 
@@ -280,7 +283,6 @@ public:
     double getPeriod()
     {
         return 1.0;
-
     }
 
     bool updateModule()
@@ -298,7 +300,27 @@ public:
         }
         else if (operationMode == "dump_one")
         {
-            yDebug() << "Dumped point cloud in PCL format";
+            PointCloud<XYZ_DATA> yarpCloud;
+            yarpCloud.clear();
+
+            if (retrieveObjectPointCloud(yarpCloud))
+            {
+                //  convert the yarp point cloud into a pcl point cloud
+                pcl::PointCloud<pcl::PointXYZ> pclCloud;
+                pclCloud = yarp::pcl::toPCL<pcl::PointXYZ, XYZ_DATA>(yarpCloud);
+
+                //  dump tp PCD file
+                string dumpFileName = objectToFind + "_" + baseDumpFileName + ".pcd";
+                if (yarp::pcl::savePCD< pcl::PointXYZ, XYZ_DATA >(dumpFileName, yarpCloud) == 0)
+                {
+                    yDebug() << "Dumped point cloud in PCD format: " << dumpFileName;
+
+                }
+                else
+                    yError() << "Dump failed!";
+            }
+            else
+                yError() << "Could not retrieve object point cloud";
         }
         else if (operationMode == "none")
         {
