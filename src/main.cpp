@@ -11,10 +11,10 @@
 #include <yarp/sig/all.h>
 #include <yarp/dev/all.h>
 #include <yarp/math/Math.h>
-#include <pcl/io/pcd_io.h>
-#include <yarp/pcl/Pcl.h>
 
 #include <string>
+#include <iostream>
+#include <fstream>
 
 using namespace std;
 using namespace yarp::os;
@@ -31,7 +31,7 @@ protected:
     RpcClient outCommandOPC;
     RpcClient outCommandSFM;
 
-    BufferedPort< PointCloud<XYZ_DATA> > outPort;
+    BufferedPort< yarp::sig::Matrix > outPort;
 
     Mutex mutex;
 
@@ -108,7 +108,7 @@ protected:
 
     }
 
-    bool retrieveObjectPointCloud(PointCloud<XYZ_DATA> &objectPointCloud)
+    bool retrieveObjectPointCloud(Matrix &objectPointCloud)
     {
         //  get object bounding box given object name
 
@@ -131,16 +131,17 @@ protected:
 
             outCommandSFM.write(cmd, reply);
 
-            objectPointCloud.clear();
-            objectPointCloud.resize(width, height);
+            //  point cloud has the form of a n x 3 matrix
+            objectPointCloud.resize(width*height, 3);
+            objectPointCloud.zero();
 
             //  reply contains a list of X Y Z triplets
             //  WARNING: LOGS INVALID DISPARITY POINTS AS WELL
             for (int idx = 0; idx < reply.size(); idx+=3)
             {
-                objectPointCloud(idx/3).x = reply.get(idx+0).asDouble();
-                objectPointCloud(idx/3).y = reply.get(idx+1).asDouble();
-                objectPointCloud(idx/3).z = reply.get(idx+2).asDouble();
+                objectPointCloud(idx/3, 0) = reply.get(idx+0).asDouble();   // x value
+                objectPointCloud(idx/3, 1) = reply.get(idx+1).asDouble();   // y value
+                objectPointCloud(idx/3, 2) = reply.get(idx+2).asDouble();   // z value
             }
             return true;
         }
@@ -155,14 +156,14 @@ protected:
     bool streamSinglePointCloud()
     {
         //  retrieve object point cloud
-        PointCloud<XYZ_DATA> &objectPointCloud = outPort.prepare();
-        objectPointCloud.clear();
+
+        Matrix &objectPointCloud = outPort.prepare();
 
         if (retrieveObjectPointCloud(objectPointCloud))
         {
             //  send point cloud on output port
-            for (int point_idx = 0; point_idx < objectPointCloud.size(); point_idx++)
-                yDebug() << "Point: " << objectPointCloud(point_idx).x << " " << objectPointCloud(point_idx).y << " " << objectPointCloud(point_idx).z;
+            for (int point_idx = 0; point_idx < objectPointCloud.rows(); point_idx++)
+                yDebug() << "Point: " << objectPointCloud(point_idx, 0) << " " << objectPointCloud(point_idx, 1) << " " << objectPointCloud(point_idx, 2);
             outPort.write();
             return true;
         }
@@ -171,6 +172,42 @@ protected:
             yError() << "Could not retrieve point cloud for object " << objectToFind;
             return false;
         }
+    }
+
+    int dumpToPCDFile(const string &filename, Matrix pointCloud)
+    {
+        fstream dumpFile;
+        dumpFile.open(filename, ios::out);
+
+        if (dumpFile.is_open()){
+            int n_points = pointCloud.rows();
+
+            dumpFile << "# .PCD v.7 - Point Cloud Data file format" << "\n";
+            dumpFile << "VERSION .7" << "\n";
+            dumpFile << "FIELDS x y z" << "\n";             //  suppose point cloud contains x y z coordinates
+            dumpFile << "SIZE 8 8 8" << "\n";               //  suppose each entry is double
+            dumpFile << "TYPE F F F" << "\n";
+            dumpFile << "COUNT 1 1 1" << "\n";
+            dumpFile << "WIDTH " << n_points << "\n";
+            dumpFile << "HEIGHT 1" << "\n";
+            dumpFile << "VIEWPOINT 0 0 0 1 0 0 0" << "\n";
+            dumpFile << "POINTS " << n_points << "\n";
+            dumpFile << "DATA ascii" << "\n";               //  coordinates will be inserted as ascii and not binary
+
+            for (int idx_point = 0; idx_point < n_points; idx_point++)
+            {
+                dumpFile << pointCloud(idx_point, 0) << " ";
+                dumpFile << pointCloud(idx_point, 1) << " ";
+                dumpFile << pointCloud(idx_point, 2) << "\n";
+            }
+
+            dumpFile.close();
+
+            return 0;
+        }
+
+        return -1;
+
     }
 
 public:
@@ -300,18 +337,14 @@ public:
         }
         else if (operationMode == "dump_one")
         {
-            PointCloud<XYZ_DATA> yarpCloud;
-            yarpCloud.clear();
+            Matrix yarpCloud;
 
             if (retrieveObjectPointCloud(yarpCloud))
             {
-                //  convert the yarp point cloud into a pcl point cloud
-                pcl::PointCloud<pcl::PointXYZ> pclCloud;
-                pclCloud = yarp::pcl::toPCL<pcl::PointXYZ, XYZ_DATA>(yarpCloud);
-
                 //  dump tp PCD file
                 string dumpFileName = objectToFind + "_" + baseDumpFileName + ".pcd";
-                if (yarp::pcl::savePCD< pcl::PointXYZ, XYZ_DATA >(dumpFileName, yarpCloud) == 0)
+
+                if (dumpToPCDFile(dumpFileName, yarpCloud) == 0)
                 {
                     yDebug() << "Dumped point cloud in PCD format: " << dumpFileName;
 
@@ -321,6 +354,8 @@ public:
             }
             else
                 yError() << "Could not retrieve object point cloud";
+
+            operationMode = "none";
         }
         else if (operationMode == "none")
         {
