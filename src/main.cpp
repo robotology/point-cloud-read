@@ -174,7 +174,7 @@ protected:
         }
     }
 
-    int dumpToPCDFile(const string &filename, Matrix pointCloud)
+    int dumpToPCDFile(const string &filename, const Matrix &pointCloud)
     {
         fstream dumpFile;
         dumpFile.open(filename, ios::out);
@@ -193,6 +193,33 @@ protected:
             dumpFile << "VIEWPOINT 0 0 0 1 0 0 0" << "\n";
             dumpFile << "POINTS " << n_points << "\n";
             dumpFile << "DATA ascii" << "\n";               //  coordinates will be inserted as ascii and not binary
+
+            for (int idx_point = 0; idx_point < n_points; idx_point++)
+            {
+                dumpFile << pointCloud(idx_point, 0) << " ";
+                dumpFile << pointCloud(idx_point, 1) << " ";
+                dumpFile << pointCloud(idx_point, 2) << "\n";
+            }
+
+            dumpFile.close();
+
+            return 0;
+        }
+
+        return -1;
+
+    }
+
+    int dumpToOFFFile(const string &filename, const Matrix &pointCloud)
+    {
+        fstream dumpFile;
+        dumpFile.open(filename, ios::out);
+
+        if (dumpFile.is_open()){
+            int n_points = pointCloud.rows();
+
+            dumpFile << "OFF"               << "\n";
+            dumpFile << n_points << " 0 0"  << "\n";
 
             for (int idx_point = 0; idx_point < n_points; idx_point++)
             {
@@ -342,11 +369,20 @@ public:
             if (retrieveObjectPointCloud(yarpCloud))
             {
                 //  dump tp PCD file
-                string dumpFileName = objectToFind + "_" + baseDumpFileName + ".pcd";
+//                string dumpFileName = objectToFind + "_" + baseDumpFileName + ".pcd";
 
-                if (dumpToPCDFile(dumpFileName, yarpCloud) == 0)
+//                if (dumpToPCDFile(dumpFileName, yarpCloud) == 0)
+//                {
+//                    yDebug() << "Dumped point cloud in PCD format: " << dumpFileName;
+
+//                }
+//                else
+//                    yError() << "Dump failed!";
+                string dumpFileName = objectToFind + "_" + baseDumpFileName + ".off";
+
+                if (dumpToOFFFile(dumpFileName, yarpCloud) == 0)
                 {
-                    yDebug() << "Dumped point cloud in PCD format: " << dumpFileName;
+                    yDebug() << "Dumped point cloud in OFF format: " << dumpFileName;
 
                 }
                 else
