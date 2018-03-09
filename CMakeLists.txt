@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 2.8.9)
 
 # produce the cmake var PROJECT_NAME
-project(point-cloud-dump)
+project(point-cloud-read)
 
 # mandatory use of these packages
 find_package(YARP REQUIRED)

@@ -15,6 +15,7 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <deque>
 
 using namespace std;
 using namespace yarp::os;
@@ -22,6 +23,36 @@ using namespace yarp::sig;
 using namespace yarp::math;
 
 /**************************************************************/
+class Point3DRGB
+{
+public:
+    double x, y, z;
+    int r, g, b;
+
+    Point3DRGB(double x, double y, double z, char r, char g, char b)
+    {
+        this->x = x;
+        this->y = y;
+        this->z = z;
+        this->r = g;
+        this->g = g;
+        this->b = b;
+    }
+
+    Vector toYarpVectorRGB()
+    {
+        Vector point_vec(6);
+
+        point_vec(0) = x;
+        point_vec(1) = y;
+        point_vec(2) = z;
+        point_vec(3) = r;
+        point_vec(4) = g;
+        point_vec(5) = b;
+
+        return point_vec;
+    }
+};
 
 class PointCloudReadModule: public yarp::os::RFModule
 {
@@ -30,8 +61,10 @@ protected:
     RpcServer inCommandPort;
     RpcClient outCommandOPC;
     RpcClient outCommandSFM;
+    RpcClient outCommandSegm;
 
-    BufferedPort< yarp::sig::Matrix > outPort;
+    BufferedPort< Matrix > outPort;
+    BufferedPort<ImageOf<PixelRgb>> inImgPort;
 
     Mutex mutex;
 
@@ -108,6 +141,87 @@ protected:
 
     }
 
+    bool retrieveObjectPointCloud(deque<Point3DRGB> &objectPointCloud)
+    {
+        //  get object bounding box given object name
+
+        Vector bb_top_left, bb_bot_right;
+
+        if (retrieveObjectBoundingBox(objectToFind, bb_top_left, bb_bot_right))
+        {
+            int width   = abs(bb_bot_right(0) - bb_top_left(0)) + 1;
+            int height  = abs(bb_bot_right(1) - bb_top_left(1)) + 1;
+
+            //  get list of points that belong to the object from lbpextract
+            //  command message format: [get_component_around x y]
+            int center_bb_x = bb_top_left(0) + width/2;
+            int center_bb_y = bb_top_left(1) + (bb_bot_right(1) - bb_top_left(1))/2;
+
+            Bottle cmdSeg, replySeg;
+            cmdSeg.addString("get_component_around");
+            cmdSeg.addInt(center_bb_x);
+            cmdSeg.addInt(center_bb_y);
+
+            if (!outCommandSegm.write(cmdSeg,replySeg)){
+                yError() << "Could not write to segmentation RPC port";
+                return false;
+            }
+
+            //  lbpExtract replies with a list of points
+            Bottle *pointList = replySeg.get(0).asList();
+
+            if (pointList->size() > 0){
+
+                //  each point is a list of 2 coordinates
+                //  build one list of points to query SFM for 3d coordinates
+                Bottle cmdSFM, replySFM;
+                cmdSFM.addString("Points");
+                cmdSFM.addString(pointList->toString());
+
+                if (!outCommandSFM.write(cmdSFM, replySFM))
+                {
+                    yError() << "Could not write to SFM RPC port";
+                    return false;
+                }
+
+                //  acquire image from camera input
+                ImageOf<PixelRgb> *inCamImg = inImgPort.read();
+
+                //  empty point cloud
+                objectPointCloud.clear();
+
+                yDebug() << "Reply from SFM obtained. Cycling through " << pointList->size() << " 3D points...";
+
+                for (int point_idx = 0; point_idx < pointList->size(); point_idx++)
+                {
+                    double x = replySFM.get(point_idx*3+0).asDouble();   // x value
+                    double y = replySFM.get(point_idx*3+1).asDouble();   // y value
+                    double z = replySFM.get(point_idx*3+2).asDouble();   // z value
+
+                    //  0 0 0 points are invalid and must be discarded
+                    if (x==0 && y==0 && z==0)
+                        continue;
+
+                    //  fetch rgb from image according to 2D coordinates
+                    Bottle *point2D = pointList->get(point_idx).asList();
+                    PixelRgb point_rgb = inCamImg->pixel(point2D->get(0).asInt(), point2D->get(1).asInt());
+
+                    objectPointCloud.push_back(Point3DRGB(x, y, z, point_rgb.r, point_rgb.g, point_rgb.b));
+                }
+
+                yInfo() << "Point cloud retrieved: " << objectPointCloud.size() << " points stored.";
+
+            }
+            return true;
+        }
+        else
+        {
+            yError() << "Could not retrieve bounding box for object " << objectToFind;
+            return false;
+        }
+    }
+
+
     bool retrieveObjectPointCloud(Matrix &objectPointCloud)
     {
         //  get object bounding box given object name
@@ -156,14 +270,23 @@ protected:
     bool streamSinglePointCloud()
     {
         //  retrieve object point cloud
+        deque<Point3DRGB> pointCloud;
 
-        Matrix &objectPointCloud = outPort.prepare();
+        Matrix &matPointCloud = outPort.prepare();
+        matPointCloud.resize(pointCloud.size(), 6);
+        matPointCloud.zero();
 
-        if (retrieveObjectPointCloud(objectPointCloud))
+        if (retrieveObjectPointCloud(pointCloud))
         {
             //  send point cloud on output port
-            for (int point_idx = 0; point_idx < objectPointCloud.rows(); point_idx++)
-                yDebug() << "Point: " << objectPointCloud(point_idx, 0) << " " << objectPointCloud(point_idx, 1) << " " << objectPointCloud(point_idx, 2);
+            for (int idx_point = 0; idx_point < pointCloud.size(); idx_point++)
+            {
+                //  convert to yarp vector and append as rowbefore writing to output
+                matPointCloud.setRow(idx_point, pointCloud.at(idx_point).toYarpVectorRGB());
+                yDebug() << "Point: " << matPointCloud(idx_point, 0) << " " << matPointCloud(idx_point, 1) << " " << matPointCloud(idx_point, 2);
+            }
+
+            //  farewell, ol' point cloud
             outPort.write();
             return true;
         }
@@ -174,58 +297,58 @@ protected:
         }
     }
 
-    int dumpToPCDFile(const string &filename, const Matrix &pointCloud)
+//    int dumpToPCDFile(const string &filename, const Matrix &pointCloud)
+//    {
+//        fstream dumpFile;
+//        dumpFile.open(filename + ".pcd", ios::out);
+
+//        if (dumpFile.is_open()){
+//            int n_points = pointCloud.rows();
+
+//            dumpFile << "# .PCD v.7 - Point Cloud Data file format" << "\n";
+//            dumpFile << "VERSION .7" << "\n";
+//            dumpFile << "FIELDS x y z" << "\n";             //  suppose point cloud contains x y z coordinates
+//            dumpFile << "SIZE 8 8 8" << "\n";               //  suppose each entry is double
+//            dumpFile << "TYPE F F F" << "\n";
+//            dumpFile << "COUNT 1 1 1" << "\n";
+//            dumpFile << "WIDTH " << n_points << "\n";
+//            dumpFile << "HEIGHT 1" << "\n";
+//            dumpFile << "VIEWPOINT 0 0 0 1 0 0 0" << "\n";
+//            dumpFile << "POINTS " << n_points << "\n";
+
+//            outPort.write();
+//            return true;        dumpFile << "DATA ascii" << "\n";               //  coordinates will be inserted as ascii and not binary
+
+//            for (int idx_point = 0; idx_point < n_points; idx_point++)
+//            {
+//                dumpFile << pointCloud(idx_point, 0) << " ";
+//                dumpFile << pointCloud(idx_point, 1) << " ";
+//                dumpFile << pointCloud(idx_point, 2) << "\n";
+//            }
+
+//            dumpFile.close();
+
+//            return 0;
+//        }
+
+//        return -1;
+
+//    }
+
+    int dumpToOFFFile(const string &filename, deque<Point3DRGB> &pointCloud)
     {
         fstream dumpFile;
-        dumpFile.open(filename, ios::out);
+        dumpFile.open(filename + ".off", ios::out);
 
         if (dumpFile.is_open()){
-            int n_points = pointCloud.rows();
-
-            dumpFile << "# .PCD v.7 - Point Cloud Data file format" << "\n";
-            dumpFile << "VERSION .7" << "\n";
-            dumpFile << "FIELDS x y z" << "\n";             //  suppose point cloud contains x y z coordinates
-            dumpFile << "SIZE 8 8 8" << "\n";               //  suppose each entry is double
-            dumpFile << "TYPE F F F" << "\n";
-            dumpFile << "COUNT 1 1 1" << "\n";
-            dumpFile << "WIDTH " << n_points << "\n";
-            dumpFile << "HEIGHT 1" << "\n";
-            dumpFile << "VIEWPOINT 0 0 0 1 0 0 0" << "\n";
-            dumpFile << "POINTS " << n_points << "\n";
-            dumpFile << "DATA ascii" << "\n";               //  coordinates will be inserted as ascii and not binary
-
-            for (int idx_point = 0; idx_point < n_points; idx_point++)
-            {
-                dumpFile << pointCloud(idx_point, 0) << " ";
-                dumpFile << pointCloud(idx_point, 1) << " ";
-                dumpFile << pointCloud(idx_point, 2) << "\n";
-            }
-
-            dumpFile.close();
-
-            return 0;
-        }
-
-        return -1;
-
-    }
-
-    int dumpToOFFFile(const string &filename, const Matrix &pointCloud)
-    {
-        fstream dumpFile;
-        dumpFile.open(filename, ios::out);
-
-        if (dumpFile.is_open()){
-            int n_points = pointCloud.rows();
+            int n_points = pointCloud.size();
 
             dumpFile << "OFF"               << "\n";
             dumpFile << n_points << " 0 0"  << "\n";
 
             for (int idx_point = 0; idx_point < n_points; idx_point++)
             {
-                dumpFile << pointCloud(idx_point, 0) << " ";
-                dumpFile << pointCloud(idx_point, 1) << " ";
-                dumpFile << pointCloud(idx_point, 2) << "\n";
+                dumpFile << pointCloud.at(idx_point).toYarpVectorRGB().toString() << "\n";
             }
 
             dumpFile.close();
@@ -256,8 +379,10 @@ public:
         bool okOpen = true;
 
         okOpen &= inCommandPort.open("/" + moduleName + "/rpc");
+        okOpen &= inImgPort.open("/" + moduleName + "/imgL:i");
         okOpen &= outCommandOPC.open("/" + moduleName + "/OPCrpc");
         okOpen &= outCommandSFM.open("/" + moduleName + "/SFMrpc");
+        okOpen &= outCommandSegm.open("/" + moduleName + "/segmrpc");
         okOpen &= outPort.open("/" + moduleName + "/pointCloud:o");
 
         if (!okOpen)
@@ -277,8 +402,10 @@ public:
     bool interruptModule()
     {
         inCommandPort.interrupt();
+        inImgPort.interrupt();
         outCommandOPC.interrupt();
         outCommandSFM.interrupt();
+        outCommandSegm.interrupt();
 
         return true;
 
@@ -287,8 +414,11 @@ public:
     bool close()
     {
         inCommandPort.close();
+        inImgPort.close();
         outCommandOPC.close();
         outCommandSFM.close();
+        outCommandSegm.close();
+        outPort.close();
 
         return true;
 
@@ -364,22 +494,17 @@ public:
         }
         else if (operationMode == "dump_one")
         {
-            Matrix yarpCloud;
+            deque<Point3DRGB> yarpCloud;
 
             if (retrieveObjectPointCloud(yarpCloud))
             {
-                //  dump tp PCD file
-//                string dumpFileName = objectToFind + "_" + baseDumpFileName + ".pcd";
-
+                //  dump point cloud to file
+                string dumpFileName = objectToFind + "_" + baseDumpFileName;
 //                if (dumpToPCDFile(dumpFileName, yarpCloud) == 0)
 //                {
 //                    yDebug() << "Dumped point cloud in PCD format: " << dumpFileName;
 
 //                }
-//                else
-//                    yError() << "Dump failed!";
-                string dumpFileName = objectToFind + "_" + baseDumpFileName + ".off";
-
                 if (dumpToOFFFile(dumpFileName, yarpCloud) == 0)
                 {
                     yDebug() << "Dumped point cloud in OFF format: " << dumpFileName;
