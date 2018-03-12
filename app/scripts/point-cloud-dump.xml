@@ -1,0 +1,35 @@
+<application>
+
+  <name>Point cloud reader/dumper</name>
+
+  <dependencies>
+      <port>/SFM/rpc</port>
+      <port>/memory/rpc</port>
+      <port>/icub/cam/left</port>
+      <port>/lbpextract/rpc:i</port>
+  </dependencies>
+
+  <module>
+      <name>point-cloud-read</name>
+      <node>localhost</node>
+  </module>
+
+  <connection>
+    <from>/icub/cam/left</from>
+    <to>/pointCloudRead/imgL:i</to>
+    <protocol>udp</protocol>
+</connection>
+
+<connection>
+    <from>/pointCloudRead/OPCrpc</from>
+    <to>/memory/rpc</to>
+    <protocol>tcp</protocol>
+</connection>
+
+<connection>
+    <from>/pointCloudRead/SFMrpc</from>
+    <to>/SFM/rpc</to>
+    <protocol>tcp</protocol>
+</connection>
+
+</application>
