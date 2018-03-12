@@ -27,9 +27,9 @@ class Point3DRGB
 {
 public:
     double x, y, z;
-    char r, g, b;
+    unsigned char r, g, b;
 
-    Point3DRGB(double x, double y, double z, char r, char g, char b)
+    Point3DRGB(double x, double y, double z, unsigned char r, unsigned char g, unsigned char b)
     {
         this->x = x;
         this->y = y;
@@ -311,27 +311,16 @@ protected:
         //  retrieve object point cloud
         deque<Point3DRGB> pointCloud;
 
-        //TODO: FIX THIS FUCKING FUNCTION!!!!
-
-
-
-        Matrix &matPointCloud = outPort.prepare();
-        matPointCloud.resize(30, 3);
-        matPointCloud.zero();
-
         if (retrieveObjectPointCloud(pointCloud))
         {
+            Matrix &matPointCloud = outPort.prepare();
+            matPointCloud.resize(pointCloud.size(), 6);
+            matPointCloud.zero();
             //  send point cloud on output port
             for (int idx_point = 0; idx_point < pointCloud.size(); idx_point++)
             {
-                continue;
-                matPointCloud(idx_point, 0) = pointCloud.at(idx_point).x;
-                matPointCloud(idx_point, 1) = pointCloud.at(idx_point).y;
-                matPointCloud(idx_point, 2) = pointCloud.at(idx_point).z;
-                yDebug() << idx_point << " Row set";
-                //matPointCloud(idx_point, 3) = pointCloud.at(idx_point).r;
-                //matPointCloud(idx_point, 4) = pointCloud.at(idx_point).g;
-                //matPointCloud(idx_point, 5) = pointCloud.at(idx_point).b;
+                if (!matPointCloud.setRow(idx_point, pointCloud.at(idx_point).toYarpVectorRGB()))
+                    yError() << "Failed at writing point" << idx_point << "on output port";
             }
 
             //  farewell, point cloud
@@ -391,12 +380,19 @@ protected:
         if (dumpFile.is_open()){
             int n_points = pointCloud.size();
 
-            dumpFile << "OFF"               << "\n";
+            dumpFile << "COFF"               << "\n";
             dumpFile << n_points << " 0 0"  << "\n";
 
             for (int idx_point = 0; idx_point < n_points; idx_point++)
             {
-                dumpFile << pointCloud.at(idx_point).toYarpVectorRGB().toString() << "\n";
+                //  add xyz rgb
+                //dumpFile << pointCloud.at(idx_point).toYarpVectorRGB().toString() << "\n";
+                dumpFile << pointCloud.at(idx_point).x << " ";
+                dumpFile << pointCloud.at(idx_point).y << " ";
+                dumpFile << pointCloud.at(idx_point).z << " ";
+                dumpFile << (int)pointCloud.at(idx_point).r << " ";
+                dumpFile << (int)pointCloud.at(idx_point).g << " ";
+                dumpFile << (int)pointCloud.at(idx_point).b << "\n";
             }
 
             dumpFile.close();
