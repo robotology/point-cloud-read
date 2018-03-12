@@ -27,14 +27,14 @@ class Point3DRGB
 {
 public:
     double x, y, z;
-    int r, g, b;
+    char r, g, b;
 
     Point3DRGB(double x, double y, double z, char r, char g, char b)
     {
         this->x = x;
         this->y = y;
         this->z = z;
-        this->r = g;
+        this->r = r;
         this->g = g;
         this->b = b;
     }
@@ -50,6 +50,17 @@ public:
         point_vec(4) = g;
         point_vec(5) = b;
 
+        return point_vec;
+    }
+
+    Vector toYarpVector()
+    {
+        Vector point_vec(3);
+        
+        point_vec(0) = x;
+        point_vec(1) = y;
+        point_vec(2) = z;
+        
         return point_vec;
     }
 };
@@ -85,6 +96,8 @@ protected:
         content.addString("==");
         content.addString(objName);
         outCommandOPC.write(cmd,reply);
+
+        
 
         //  reply message format: [nack]; [ack] ("id" (<num0> <num1> ...))
         if (reply.size()>1)
@@ -167,7 +180,15 @@ protected:
                 return false;
             }
 
+            yDebug() << "Segmented point list obtained from segmentation rpc";
+
             //  lbpExtract replies with a list of points
+            if (replySeg.size() < 1)
+                {
+                yError() << "Empty point list retrieved from segmentation module!" ;
+                return false;
+                }
+
             Bottle *pointList = replySeg.get(0).asList();
 
             if (pointList->size() > 0){
@@ -176,7 +197,19 @@ protected:
                 //  build one list of points to query SFM for 3d coordinates
                 Bottle cmdSFM, replySFM;
                 cmdSFM.addString("Points");
-                cmdSFM.addString(pointList->toString());
+
+                yDebug() << "Retrieved " << pointList->size() << " 2D points.";
+                
+                for (int point_idx=0; point_idx < pointList->size(); point_idx++)
+                {  
+                Bottle *point2D = pointList->get(point_idx).asList();
+                cmdSFM.addInt(point2D->get(0).asInt());
+                cmdSFM.addInt(point2D->get(1).asInt());
+                }
+
+                yDebug() << "Query: " << cmdSFM.toString();
+
+                //cmdSFM.addString(pointList->toString());
 
                 if (!outCommandSFM.write(cmdSFM, replySFM))
                 {
@@ -184,22 +217,28 @@ protected:
                     return false;
                 }
 
+                yDebug() << "3D point list obtained from SFM";
+
                 //  acquire image from camera input
                 ImageOf<PixelRgb> *inCamImg = inImgPort.read();
+
+                yDebug() << "Image obtained from camera stream";
 
                 //  empty point cloud
                 objectPointCloud.clear();
 
                 yDebug() << "Reply from SFM obtained. Cycling through " << pointList->size() << " 3D points...";
 
-                for (int point_idx = 0; point_idx < pointList->size(); point_idx++)
+                for (int point_idx = 0; point_idx < replySFM.size()/3; point_idx++)
                 {
-                    double x = replySFM.get(point_idx*3+0).asDouble();   // x value
+                    double x = replySFM.get(point_idx*3).asDouble();   // x value
                     double y = replySFM.get(point_idx*3+1).asDouble();   // y value
                     double z = replySFM.get(point_idx*3+2).asDouble();   // z value
 
+                    yDebug() << x << y << z;                    
+
                     //  0 0 0 points are invalid and must be discarded
-                    if (x==0 && y==0 && z==0)
+                    if (x==0.0 && y==0.0 && z==0.0)
                         continue;
 
                     //  fetch rgb from image according to 2D coordinates
@@ -272,8 +311,12 @@ protected:
         //  retrieve object point cloud
         deque<Point3DRGB> pointCloud;
 
+        //TODO: FIX THIS FUCKING FUNCTION!!!!
+
+
+
         Matrix &matPointCloud = outPort.prepare();
-        matPointCloud.resize(pointCloud.size(), 6);
+        matPointCloud.resize(30, 3);
         matPointCloud.zero();
 
         if (retrieveObjectPointCloud(pointCloud))
@@ -281,12 +324,17 @@ protected:
             //  send point cloud on output port
             for (int idx_point = 0; idx_point < pointCloud.size(); idx_point++)
             {
-                //  convert to yarp vector and append as rowbefore writing to output
-                matPointCloud.setRow(idx_point, pointCloud.at(idx_point).toYarpVectorRGB());
-                yDebug() << "Point: " << matPointCloud(idx_point, 0) << " " << matPointCloud(idx_point, 1) << " " << matPointCloud(idx_point, 2);
+                continue;
+                matPointCloud(idx_point, 0) = pointCloud.at(idx_point).x;
+                matPointCloud(idx_point, 1) = pointCloud.at(idx_point).y;
+                matPointCloud(idx_point, 2) = pointCloud.at(idx_point).z;
+                yDebug() << idx_point << " Row set";
+                //matPointCloud(idx_point, 3) = pointCloud.at(idx_point).r;
+                //matPointCloud(idx_point, 4) = pointCloud.at(idx_point).g;
+                //matPointCloud(idx_point, 5) = pointCloud.at(idx_point).b;
             }
 
-            //  farewell, ol' point cloud
+            //  farewell, point cloud
             outPort.write();
             return true;
         }
@@ -507,7 +555,7 @@ public:
 //                }
                 if (dumpToOFFFile(dumpFileName, yarpCloud) == 0)
                 {
-                    yDebug() << "Dumped point cloud in OFF format: " << dumpFileName;
+                    yDebug() << "Dumped point cloud in OFF format: " << dumpFileName +".off";
 
                 }
                 else
