@@ -4,8 +4,11 @@
  *  of a desired object and retrieves a point cloud from SFM.
  *
  *  Author: Fabrizio Bottarel - <fabrizio.bottarel@iit.it>
- *
+ *  TODO: parametrize point cloud retrieval, component_around or not, a few slides
  */
+
+
+
 
 #include <yarp/os/all.h>
 #include <yarp/sig/all.h>
@@ -180,7 +183,7 @@ protected:
                 return false;
             }
 
-            yDebug() << "Segmented point list obtained from segmentation rpc";
+            yDebug() << "Segmented point list obtained from segmentation module";
 
             //  lbpExtract replies with a list of points
             if (replySeg.size() < 1)
@@ -249,9 +252,15 @@ protected:
                 }
 
                 yInfo() << "Point cloud retrieved: " << objectPointCloud.size() << " points stored.";
-
+                
+                return true;
             }
-            return true;
+            else
+            {
+                yError() << "Empty point cloud retrieved for object " << objectToFind;
+                return false;
+            }
+            
         }
         else
         {
