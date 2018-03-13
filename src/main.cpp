@@ -476,7 +476,6 @@ public:
          *
          *
          */
-        objectToFind = "Car";
 
 
         bool okOpen = true;
@@ -537,7 +536,7 @@ public:
         if (modeCmd == "stream_one")
         {
             //  check that object name is present
-            if (modeCmd.size() == 2)
+            if (command.size() == 2)
             {
                 operationMode = OpMode::OP_MODE_STREAM_ONE;
                 objectToFind = command.get(1).asString();
@@ -550,7 +549,7 @@ public:
         else if (modeCmd == "stream_many")
         {
             //  check that object name is present
-            if (modeCmd.size() == 2)
+            if (command.size() == 2)
             {
                 operationMode = OpMode::OP_MODE_STREAM_MANY;
                 objectToFind = command.get(1).asString();
@@ -562,7 +561,7 @@ public:
         else if (modeCmd == "dump_one")
         {
             //  check that object name is present
-            if (modeCmd.size() == 2)
+            if (command.size() == 2)
             {
                 operationMode = OpMode::OP_MODE_DUMP_ONE;
                 objectToFind = command.get(1).asString();
