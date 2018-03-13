@@ -8,8 +8,6 @@
  */
 
 
-
-
 #include <yarp/os/all.h>
 #include <yarp/sig/all.h>
 #include <yarp/dev/all.h>
@@ -26,6 +24,12 @@ using namespace yarp::sig;
 using namespace yarp::math;
 
 /**************************************************************/
+
+/*
+ * Define a class to represent points in the xyz space with color
+ * attributes.
+*/
+
 class Point3DRGB
 {
 public:
@@ -72,6 +76,14 @@ class PointCloudReadModule: public yarp::os::RFModule
 {
 protected:
 
+    enum class OpMode
+    {
+        OP_MODE_STREAM_ONE,
+        OP_MODE_STREAM_MANY,
+        OP_MODE_DUMP_ONE,
+        OP_MODE_NONE
+    };
+
     RpcServer inCommandPort;
     RpcClient outCommandOPC;
     RpcClient outCommandSFM;
@@ -82,12 +94,13 @@ protected:
 
     Mutex mutex;
 
-    string moduleName, operationMode, objectToFind, baseDumpFileName;
+    string moduleName, objectToFind, baseDumpFileName;
+
+    OpMode operationMode;
 
     bool retrieveObjectBoundingBox(const string objName, Vector &top_left_xy, Vector &bot_right_xy)
     {
         //  get object bounding box from OPC module given object name
-
         top_left_xy.resize(2);
         bot_right_xy.resize(2);
 
@@ -98,9 +111,7 @@ protected:
         content.addString("name");
         content.addString("==");
         content.addString(objName);
-        outCommandOPC.write(cmd,reply);
-
-        
+        outCommandOPC.write(cmd,reply);   
 
         //  reply message format: [nack]; [ack] ("id" (<num0> <num1> ...))
         if (reply.size()>1)
@@ -384,7 +395,21 @@ protected:
     int dumpToOFFFile(const string &filename, deque<Point3DRGB> &pointCloud)
     {
         fstream dumpFile;
-        dumpFile.open(filename + ".off", ios::out);
+        string filename_n_ext;
+
+        //  if file already exists, create one with different name
+        for(int file_n=0; file_n<1000; file_n++)
+        {
+            string file_num = std::to_string(file_n);
+            file_num.insert(file_num.begin(), 3-file_num.length(), '0');
+            filename_n_ext = filename + "_" + file_num + ".off";
+            //  check if file can be accessed
+            fstream f(filename_n_ext.c_str());
+            if (!f.good())
+                break;
+        }
+
+        dumpFile.open(filename_n_ext, ios::out);
 
         if (dumpFile.is_open()){
             int n_points = pointCloud.size();
@@ -413,11 +438,36 @@ protected:
 
     }
 
+    bool dumpPointCloud(){
+
+        deque<Point3DRGB> yarpCloud;
+
+        if (retrieveObjectPointCloud(yarpCloud))
+        {
+            //  dump point cloud to file
+            string dumpFileName = objectToFind + "_" + baseDumpFileName;
+            if (dumpToOFFFile(dumpFileName, yarpCloud) == 0)
+            {
+                yInfo() << "Dumped point cloud in OFF format.";
+                return true;
+
+            }
+            else
+                yError() << "Dump failed!";
+        }
+        else
+            yError() << "Could not retrieve object point cloud";
+
+        return false;
+
+    }
+
 public:
 
     bool configure(ResourceFinder &rf)
     {
         moduleName = "pointCloudRead";
+        baseDumpFileName = "point_cloud";
 
         /*
          *
@@ -427,7 +477,7 @@ public:
          *
          */
         objectToFind = "Car";
-        baseDumpFileName = "point_cloud";
+
 
         bool okOpen = true;
 
@@ -446,7 +496,7 @@ public:
 
         attach(inCommandPort);
 
-        operationMode = "none";
+        operationMode = OpMode::OP_MODE_NONE;
 
         return true;
 
@@ -486,30 +536,52 @@ public:
 
         if (modeCmd == "stream_one")
         {
-            operationMode = "stream_one";
-            reply.addString("ack");
+            //  check that object name is present
+            if (modeCmd.size() == 2)
+            {
+                operationMode = OpMode::OP_MODE_STREAM_ONE;
+                objectToFind = command.get(1).asString();
+                reply.addString("ack");
+            }
+            else
+                reply.addString("nack");
+
         }
         else if (modeCmd == "stream_many")
         {
-            operationMode = "stream_many";
-            reply.addString("ack");
+            //  check that object name is present
+            if (modeCmd.size() == 2)
+            {
+                operationMode = OpMode::OP_MODE_STREAM_MANY;
+                objectToFind = command.get(1).asString();
+                reply.addString("ack");
+            }
+            else
+                reply.addString("nack");
         }
         else if (modeCmd == "dump_one")
         {
-            operationMode = "dump_one";
-            reply.addString("ack");
+            //  check that object name is present
+            if (modeCmd.size() == 2)
+            {
+                operationMode = OpMode::OP_MODE_DUMP_ONE;
+                objectToFind = command.get(1).asString();
+                reply.addString("ack");
+            }
+            else
+                reply.addString("nack");
         }
         else if (modeCmd == "stop_stream")
         {
-            operationMode = "none";
+            operationMode = OpMode::OP_MODE_NONE;
             reply.addString("ack");
         }
         else if (modeCmd == "help")
         {
             reply.addString("Available commands:");
-            reply.addString("- stream_one");
-            reply.addString("- stream_many");
-            reply.addString("- dump_one");
+            reply.addString("- stream_one [object_name]");
+            reply.addString("- stream_many [object_name]");
+            reply.addString("- dump_one [object_name]");
             reply.addString("- stop_stream");
             reply.addString("- quit");
         }
@@ -536,42 +608,21 @@ public:
     {
         mutex.lock();
 
-        if (operationMode == "stream_one")
+        if (operationMode == OpMode::OP_MODE_STREAM_ONE)
         {
             streamSinglePointCloud();
-            operationMode = "none";
+            operationMode = OpMode::OP_MODE_NONE;
         }
-        else if (operationMode == "stream_many")
+        else if (operationMode == OpMode::OP_MODE_STREAM_MANY)
         {
             streamSinglePointCloud();
         }
-        else if (operationMode == "dump_one")
+        else if (operationMode == OpMode::OP_MODE_DUMP_ONE)
         {
-            deque<Point3DRGB> yarpCloud;
-
-            if (retrieveObjectPointCloud(yarpCloud))
-            {
-                //  dump point cloud to file
-                string dumpFileName = objectToFind + "_" + baseDumpFileName;
-//                if (dumpToPCDFile(dumpFileName, yarpCloud) == 0)
-//                {
-//                    yDebug() << "Dumped point cloud in PCD format: " << dumpFileName;
-
-//                }
-                if (dumpToOFFFile(dumpFileName, yarpCloud) == 0)
-                {
-                    yDebug() << "Dumped point cloud in OFF format: " << dumpFileName +".off";
-
-                }
-                else
-                    yError() << "Dump failed!";
-            }
-            else
-                yError() << "Could not retrieve object point cloud";
-
-            operationMode = "none";
+            dumpPointCloud();
+            operationMode = OpMode::OP_MODE_NONE;
         }
-        else if (operationMode == "none")
+        else if (operationMode == OpMode::OP_MODE_NONE)
         {
             //  birds chirping
         }
