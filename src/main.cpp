@@ -354,44 +354,6 @@ protected:
         }
     }
 
-//    int dumpToPCDFile(const string &filename, const Matrix &pointCloud)
-//    {
-//        fstream dumpFile;
-//        dumpFile.open(filename + ".pcd", ios::out);
-
-//        if (dumpFile.is_open()){
-//            int n_points = pointCloud.rows();
-
-//            dumpFile << "# .PCD v.7 - Point Cloud Data file format" << "\n";
-//            dumpFile << "VERSION .7" << "\n";
-//            dumpFile << "FIELDS x y z" << "\n";             //  suppose point cloud contains x y z coordinates
-//            dumpFile << "SIZE 8 8 8" << "\n";               //  suppose each entry is double
-//            dumpFile << "TYPE F F F" << "\n";
-//            dumpFile << "COUNT 1 1 1" << "\n";
-//            dumpFile << "WIDTH " << n_points << "\n";
-//            dumpFile << "HEIGHT 1" << "\n";
-//            dumpFile << "VIEWPOINT 0 0 0 1 0 0 0" << "\n";
-//            dumpFile << "POINTS " << n_points << "\n";
-
-//            outPort.write();
-//            return true;        dumpFile << "DATA ascii" << "\n";               //  coordinates will be inserted as ascii and not binary
-
-//            for (int idx_point = 0; idx_point < n_points; idx_point++)
-//            {
-//                dumpFile << pointCloud(idx_point, 0) << " ";
-//                dumpFile << pointCloud(idx_point, 1) << " ";
-//                dumpFile << pointCloud(idx_point, 2) << "\n";
-//            }
-
-//            dumpFile.close();
-
-//            return 0;
-//        }
-
-//        return -1;
-
-//    }
-
     int dumpToOFFFile(const string &filename, deque<Point3DRGB> &pointCloud)
     {
         fstream dumpFile;
@@ -469,15 +431,6 @@ public:
         moduleName = "pointCloudRead";
         baseDumpFileName = "point_cloud";
 
-        /*
-         *
-         *
-         * DEBUG INSTRUCTION: ALWAYS LOOK FOR CARS
-         *
-         *
-         */
-
-
         bool okOpen = true;
 
         okOpen &= inCommandPort.open("/" + moduleName + "/rpc");
@@ -538,9 +491,15 @@ public:
             //  check that object name is present
             if (command.size() == 2)
             {
-                operationMode = OpMode::OP_MODE_STREAM_ONE;
                 objectToFind = command.get(1).asString();
-                reply.addString("ack");
+                if(streamSinglePointCloud())
+                {
+                    reply.addString("ack");
+                }
+                else
+                {
+                    reply.addString("nack");
+                }
             }
             else
                 reply.addString("nack");
@@ -563,9 +522,13 @@ public:
             //  check that object name is present
             if (command.size() == 2)
             {
-                operationMode = OpMode::OP_MODE_DUMP_ONE;
                 objectToFind = command.get(1).asString();
-                reply.addString("ack");
+                if (dumpPointCloud())
+                {
+                    reply.addString("ack");
+                }
+                else
+                    reply.addString("nack");
             }
             else
                 reply.addString("nack");
@@ -607,19 +570,9 @@ public:
     {
         mutex.lock();
 
-        if (operationMode == OpMode::OP_MODE_STREAM_ONE)
+        if (operationMode == OpMode::OP_MODE_STREAM_MANY)
         {
             streamSinglePointCloud();
-            operationMode = OpMode::OP_MODE_NONE;
-        }
-        else if (operationMode == OpMode::OP_MODE_STREAM_MANY)
-        {
-            streamSinglePointCloud();
-        }
-        else if (operationMode == OpMode::OP_MODE_DUMP_ONE)
-        {
-            dumpPointCloud();
-            operationMode = OpMode::OP_MODE_NONE;
         }
         else if (operationMode == OpMode::OP_MODE_NONE)
         {
