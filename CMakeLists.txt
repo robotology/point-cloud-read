@@ -21,6 +21,7 @@ list(APPEND CMAKE_MODULE_PATH ${YARP_MODULE_PATH})
 list(APPEND CMAKE_MODULE_PATH ${ICUBCONTRIB_MODULE_PATH})
 
 # helpers defining certain macros (e.g. "yarp_install")
+include(YarpIDL)
 include(YarpInstallationHelpers)
 include(ICUBcontribHelpers)
 include(ICUBcontribOptions)
@@ -28,9 +29,12 @@ include(ICUBcontribOptions)
 # specify to install in $ICUBcontrib_DIR/bin
 icubcontrib_set_default_prefix()
 
+yarp_add_idl(IDL_GEN_FILES src/idl.thrift)
+source_group("IDL Files" FILES src/idl.thrift)
 
-include_directories(${YARP_INCLUDE_DIRS} ${CMAKE_SOURCE_DIR}/src)
-add_executable(${PROJECT_NAME} ${CMAKE_SOURCE_DIR}/src/main.cpp)
+include_directories(${YARP_INCLUDE_DIRS})
+include_directories(${CMAKE_SOURCE_DIR}/include)
+add_executable(${PROJECT_NAME} src/main.cpp src/idl.thrift ${IDL_GEN_FILES})
 target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} ${PCL_LIBRARIES})
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 

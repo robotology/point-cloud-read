@@ -1,10 +1,10 @@
 /*
- *  Module to retrieve point clouds from SFM module and dump them to PCL
- *  compatible files. Interfaces with OPC to retrieve the position
+ *  Module to retrieve point clouds from SFM module and dump them to
+ *  OFF files or stream them. Interfaces with OPC to retrieve the position
  *  of a desired object and retrieves a point cloud from SFM.
  *
  *  Author: Fabrizio Bottarel - <fabrizio.bottarel@iit.it>
- *  TODO: parametrize point cloud retrieval, component_around or not, a few slides
+ *
  */
 
 
@@ -17,6 +17,8 @@
 #include <iostream>
 #include <fstream>
 #include <deque>
+
+#include "PCR_IDL.h"
 
 using namespace std;
 using namespace yarp::os;
@@ -72,7 +74,8 @@ public:
     }
 };
 
-class PointCloudReadModule: public yarp::os::RFModule
+class PointCloudReadModule: public RFModule,
+                            public PCR_IDL
 {
 protected:
 
@@ -94,9 +97,16 @@ protected:
 
     Mutex mutex;
 
-    string moduleName, objectToFind, baseDumpFileName;
+    string moduleName;
+    string objectToFind;
+    string baseDumpFileName;
 
     OpMode operationMode;
+
+    bool attach(RpcServer &source)
+    {
+        return this->yarp().attachAsServer(source);
+    }
 
     bool retrieveObjectBoundingBox(const string objName, Vector &top_left_xy, Vector &bot_right_xy)
     {
@@ -111,7 +121,7 @@ protected:
         content.addString("name");
         content.addString("==");
         content.addString(objName);
-        outCommandOPC.write(cmd,reply);   
+        outCommandOPC.write(cmd,reply);
 
         //  reply message format: [nack]; [ack] ("id" (<num0> <num1> ...))
         if (reply.size()>1)
@@ -280,7 +290,6 @@ protected:
         }
     }
 
-
     bool retrieveObjectPointCloud(Matrix &objectPointCloud)
     {
         //  get object bounding box given object name
@@ -424,6 +433,65 @@ protected:
 
     }
 
+    bool stream_one(const string &object)
+    {
+        mutex.lock();
+
+        //  log object that is being looked for
+        objectToFind = object;\
+        operationMode = OpMode::OP_MODE_STREAM_ONE;
+
+        //  one-shot acquisition and streaming of point cloud
+        bool reply = streamSinglePointCloud();
+
+        operationMode = OpMode::OP_MODE_NONE;
+
+        mutex.unlock();
+
+        return reply;
+
+    }
+
+    bool stream_start(const string &object)
+    {
+        mutex.lock();
+
+        //  log object that is being looked for
+        objectToFind = object;
+        operationMode = OpMode::OP_MODE_STREAM_MANY;
+
+        mutex.unlock();
+
+        return true;
+    }
+
+    bool stream_stop()
+    {
+        mutex.lock();
+
+        operationMode = OpMode::OP_MODE_NONE;
+
+        mutex.unlock();
+
+        return true;
+
+    }
+
+    bool dump_one(const string &object)
+    {
+        mutex.lock();
+
+        objectToFind = object;
+        operationMode = OpMode::OP_MODE_DUMP_ONE;
+
+        bool reply = dumpPointCloud();
+
+        mutex.unlock();
+
+        return reply;
+
+    }
+
 public:
 
     bool configure(ResourceFinder &rf)
@@ -479,87 +547,87 @@ public:
 
     }
 
-    bool respond(const Bottle &command, Bottle &reply)
-    {
-        //  change operation mode based on command and available modes
-        mutex.lock();
+//    bool respond(const Bottle &command, Bottle &reply)
+//    {
+//        //  change operation mode based on command and available modes
+//        mutex.lock();
 
-        string modeCmd = command.get(0).asString();
+//        string modeCmd = command.get(0).asString();
 
-        if (modeCmd == "stream_one")
-        {
-            //  check that object name is present
-            if (command.size() == 2)
-            {
-                objectToFind = command.get(1).asString();
-                if(streamSinglePointCloud())
-                {
-                    reply.addString("ack");
-                }
-                else
-                {
-                    reply.addString("nack");
-                }
-            }
-            else
-                reply.addString("nack");
+//        if (modeCmd == "stream_one")
+//        {
+//            //  check that object name is present
+//            if (command.size() == 2)
+//            {
+//                objectToFind = command.get(1).asString();
+//                if(streamSinglePointCloud())
+//                {
+//                    reply.addString("ack");
+//                }
+//                else
+//                {
+//                    reply.addString("nack");
+//                }
+//            }
+//            else
+//                reply.addString("nack");
 
-        }
-        else if (modeCmd == "stream_many")
-        {
-            //  check that object name is present
-            if (command.size() == 2)
-            {
-                operationMode = OpMode::OP_MODE_STREAM_MANY;
-                objectToFind = command.get(1).asString();
-                reply.addString("ack");
-            }
-            else
-                reply.addString("nack");
-        }
-        else if (modeCmd == "dump_one")
-        {
-            //  check that object name is present
-            if (command.size() == 2)
-            {
-                objectToFind = command.get(1).asString();
-                if (dumpPointCloud())
-                {
-                    reply.addString("ack");
-                }
-                else
-                    reply.addString("nack");
-            }
-            else
-                reply.addString("nack");
-        }
-        else if (modeCmd == "stop_stream")
-        {
-            operationMode = OpMode::OP_MODE_NONE;
-            reply.addString("ack");
-        }
-        else if (modeCmd == "help")
-        {
-            reply.addString("Available commands:");
-            reply.addString("- stream_one [object_name]");
-            reply.addString("- stream_many [object_name]");
-            reply.addString("- dump_one [object_name]");
-            reply.addString("- stop_stream");
-            reply.addString("- quit");
-        }
-        else if (modeCmd == "quit")
-        {
-            mutex.unlock();
-            return RFModule::respond(command, reply);
-        }
-        else
-            reply.addString("Invalid command. Type help for available commands");
+//        }
+//        else if (modeCmd == "stream_many")
+//        {
+//            //  check that object name is present
+//            if (command.size() == 2)
+//            {
+//                operationMode = OpMode::OP_MODE_STREAM_MANY;
+//                objectToFind = command.get(1).asString();
+//                reply.addString("ack");
+//            }
+//            else
+//                reply.addString("nack");
+//        }
+//        else if (modeCmd == "dump_one")
+//        {
+//            //  check that object name is present
+//            if (command.size() == 2)
+//            {
+//                objectToFind = command.get(1).asString();
+//                if (dumpPointCloud())
+//                {
+//                    reply.addString("ack");
+//                }
+//                else
+//                    reply.addString("nack");
+//            }
+//            else
+//                reply.addString("nack");
+//        }
+//        else if (modeCmd == "stop_stream")
+//        {
+//            operationMode = OpMode::OP_MODE_NONE;
+//            reply.addString("ack");
+//        }
+//        else if (modeCmd == "help")
+//        {
+//            reply.addString("Available commands:");
+//            reply.addString("- stream_one [object_name]");
+//            reply.addString("- stream_many [object_name]");
+//            reply.addString("- dump_one [object_name]");
+//            reply.addString("- stop_stream");
+//            reply.addString("- quit");
+//        }
+//        else if (modeCmd == "quit")
+//        {
+//            mutex.unlock();
+//            return RFModule::respond(command, reply);
+//        }
+//        else
+//            reply.addString("Invalid command. Type help for available commands");
 
-        mutex.unlock();
+//        mutex.unlock();
 
-        return true;
+//        return true;
 
-    }
+//    }
 
     double getPeriod()
     {
