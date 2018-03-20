@@ -6,7 +6,7 @@
       <port>/SFM/rpc</port>
       <port>/memory/rpc</port>
       <port>/icub/cam/left</port>
-      <port>/lbpextract/rpc:i</port>
+      <port>/lbpExtract/rpc:i</port>
   </dependencies>
 
   <module>
@@ -29,6 +29,12 @@
 <connection>
     <from>/pointCloudRead/SFMrpc</from>
     <to>/SFM/rpc</to>
+    <protocol>tcp</protocol>
+</connection>
+
+<connection>
+    <from>/pointCloudRead/segmrpc</from>
+    <to>/lbpExtract/rpc:i</to>
     <protocol>tcp</protocol>
 </connection>
 
