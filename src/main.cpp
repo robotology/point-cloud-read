@@ -494,9 +494,15 @@ protected:
 
     }    
 
+    bool set_period(const double modulePeriod)
+    {
+        moduleUpdatePeriod = modulePeriod;
 
+        yInfo() << "Update period changed to" << moduleUpdatePeriod << "[s]";
 
+        return true;
 
+    }
 
 public:
 
