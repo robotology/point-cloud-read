@@ -18,7 +18,7 @@
 #include <fstream>
 #include <deque>
 
-#include "PCR_IDL.h"
+#include <PCR_IDL.h>
 
 using namespace std;
 using namespace yarp::os;
@@ -100,6 +100,8 @@ protected:
     string moduleName;
     string objectToFind;
     string baseDumpFileName;
+
+    double moduleUpdatePeriod;
 
     OpMode operationMode;
 
@@ -232,8 +234,6 @@ protected:
                 }
 
                 yDebug() << "Query: " << cmdSFM.toString();
-
-                //cmdSFM.addString(pointList->toString());
 
                 if (!outCommandSFM.write(cmdSFM, replySFM))
                 {
@@ -433,7 +433,7 @@ protected:
 
     }
 
-    bool stream_one(const string &object)
+    bool stream_one(const string &object) override
     {
         mutex.lock();
 
@@ -486,11 +486,17 @@ protected:
 
         bool reply = dumpPointCloud();
 
+        operationMode = OpMode::OP_MODE_NONE;
+
         mutex.unlock();
 
         return reply;
 
-    }
+    }    
+
+
+
+
 
 public:
 
@@ -498,6 +504,9 @@ public:
     {
         moduleName = "pointCloudRead";
         baseDumpFileName = "point_cloud";
+
+        //  default update period is 1 second
+        moduleUpdatePeriod = 1.0;
 
         bool okOpen = true;
 
@@ -631,7 +640,7 @@ public:
 
     double getPeriod()
     {
-        return 1.0;
+        return moduleUpdatePeriod;
     }
 
     bool updateModule()

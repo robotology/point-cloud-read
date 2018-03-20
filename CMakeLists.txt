@@ -29,12 +29,17 @@ include(ICUBcontribOptions)
 # specify to install in $ICUBcontrib_DIR/bin
 icubcontrib_set_default_prefix()
 
-yarp_add_idl(IDL_GEN_FILES src/idl.thrift)
-source_group("IDL Files" FILES src/idl.thrift)
 
+yarp_idl_to_dir(idl.thrift ${CMAKE_SOURCE_DIR})
+
+
+#set(generated_libs_dir "${CMAKE_CURRENT_SOURCE_DIR}")
+#yarp_idl_to_dir(src/idl.thrift ${CMAKE_BINARY_DIR}/idl IDL_SRC IDL_HDR IDL_INCLUDE)
 include_directories(${YARP_INCLUDE_DIRS})
+include(idl_thrift.cmake)
 include_directories(${CMAKE_SOURCE_DIR}/include)
-add_executable(${PROJECT_NAME} src/main.cpp src/idl.thrift ${IDL_GEN_FILES})
+
+add_executable(${PROJECT_NAME} src/main.cpp ${headers} ${sources})
 target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} ${PCL_LIBRARIES})
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 

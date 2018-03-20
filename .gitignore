@@ -1,2 +1,5 @@
 build*
 *~
+*.user
+idl_thrift.cmake
+*PCR_IDL*
