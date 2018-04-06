@@ -95,8 +95,6 @@ protected:
     BufferedPort< Matrix > outPort;
     BufferedPort<ImageOf<PixelRgb>> inImgPort;
 
-    BufferedPort<Property> outSuperquadric;         //  port to stream superquadric parameters
-    BufferedPort<Property> inSuperquadric;
     BufferedPort<Bottle> outBottlePointCloud;
 
     Mutex mutex;
@@ -237,7 +235,7 @@ protected:
                 cmdSFM.addInt(point2D->get(1).asInt());
                 }
 
-                yDebug() << "Query: " << cmdSFM.toString();
+                //yDebug() << "Query: " << cmdSFM.toString();
 
                 if (!outCommandSFM.write(cmdSFM, replySFM))
                 {
@@ -263,7 +261,7 @@ protected:
                     double y = replySFM.get(point_idx*3+1).asDouble();   // y value
                     double z = replySFM.get(point_idx*3+2).asDouble();   // z value
 
-                    yDebug() << x << y << z;                    
+                    //yDebug() << x << y << z;
 
                     //  0 0 0 points are invalid and must be discarded
                     if (x==0.0 && y==0.0 && z==0.0)
@@ -545,9 +543,7 @@ public:
         okOpen &= outCommandSegm.open("/" + moduleName + "/segmrpc");
         okOpen &= outPort.open("/" + moduleName + "/pointCloud:o");
 
-        okOpen &= inSuperquadric.open("/" + moduleName + "/superquadricParams:i");
         okOpen &= outBottlePointCloud.open("/" + moduleName + "/bottledPointCloud:o");
-        okOpen &= outSuperquadric.open("/" + moduleName + "/superquadricParams:o");
 
         if (!okOpen)
         {
@@ -571,9 +567,7 @@ public:
         outCommandSFM.interrupt();
         outCommandSegm.interrupt();
 
-        inSuperquadric.interrupt();
         outBottlePointCloud.interrupt();
-        outSuperquadric.interrupt();
 
         return true;
 
@@ -589,8 +583,6 @@ public:
         outPort.close();
 
         outBottlePointCloud.close();
-        inSuperquadric.close();
-        outSuperquadric.close();
 
         return true;
 
