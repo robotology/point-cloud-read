@@ -96,7 +96,8 @@ protected:
     BufferedPort<ImageOf<PixelRgb>> inImgPort;
 
     BufferedPort<Property> outSuperquadric;         //  port to stream superquadric parameters
-    RpcClient outCommandSQM;                        //  rpc port to query superquadric-model for stuff
+    BufferedPort<Property> inSuperquadric;
+    BufferedPort<Bottle> outBottlePointCloud;
 
     Mutex mutex;
 
@@ -351,10 +352,8 @@ protected:
 
             //  HACKING ORIGINAL MODULE WITH STUFF
 
-            Bottle cmdSQM;
+            Bottle &cmdSQM = outBottlePointCloud.prepare();
             Property rplSQM;
-
-            cmdSQM.addString("get_superq");
 
             Bottle &pc = cmdSQM.addList();
 
@@ -370,25 +369,10 @@ protected:
                     yError() << "Failed at writing point" << idx_point << "on output port";
             }
 
-            //  no filtered superquadric
-            cmdSQM.addInt(0);
-
-            //  reset superquadric
-            cmdSQM.addInt(1);
-
             yDebug() << "COMMAND TO SUPERQ-MODEL:" << cmdSQM.toString();
 
             //  send rpc command, get response
-            outCommandSQM.write(cmdSQM, rplSQM);
-
-            //  reroute superquadric parameters
-            Property &superquadric_params = outSuperquadric.prepare();
-            superquadric_params = rplSQM;
-
-            yDebug() << "REPLY FROM SUPERQ-MODEL:" << rplSQM.toString();
-
-            //  stream superquadric params and related point cloud simultaneously
-            outSuperquadric.write();
+            outBottlePointCloud.write();
 
             //  farewell, point cloud
             outPort.write();
@@ -561,7 +545,8 @@ public:
         okOpen &= outCommandSegm.open("/" + moduleName + "/segmrpc");
         okOpen &= outPort.open("/" + moduleName + "/pointCloud:o");
 
-        okOpen &= outCommandSQM.open("/" + moduleName + "/SQMrpc");
+        okOpen &= inSuperquadric.open("/" + moduleName + "/superquadricParams:i");
+        okOpen &= outBottlePointCloud.open("/" + moduleName + "/bottledPointCloud:o");
         okOpen &= outSuperquadric.open("/" + moduleName + "/superquadricParams:o");
 
         if (!okOpen)
@@ -586,7 +571,8 @@ public:
         outCommandSFM.interrupt();
         outCommandSegm.interrupt();
 
-        outCommandSQM.interrupt();
+        inSuperquadric.interrupt();
+        outBottlePointCloud.interrupt();
         outSuperquadric.interrupt();
 
         return true;
@@ -602,7 +588,8 @@ public:
         outCommandSegm.close();
         outPort.close();
 
-        outCommandSQM.close();
+        outBottlePointCloud.close();
+        inSuperquadric.close();
         outSuperquadric.close();
 
         return true;
