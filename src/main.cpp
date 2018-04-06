@@ -95,7 +95,7 @@ protected:
     BufferedPort< Matrix > outPort;
     BufferedPort<ImageOf<PixelRgb>> inImgPort;
 
-    BufferedPort<Bottle> outSuperquadric;         //  port to stream superquadric parameters
+    BufferedPort<Property> outSuperquadric;         //  port to stream superquadric parameters
     RpcClient outCommandSQM;                        //  rpc port to query superquadric-model for stuff
 
     Mutex mutex;
@@ -351,7 +351,8 @@ protected:
 
             //  HACKING ORIGINAL MODULE WITH STUFF
 
-            Bottle cmdSQM, rplSQM;
+            Bottle cmdSQM;
+            Property rplSQM;
 
             cmdSQM.addString("get_superq");
 
@@ -379,7 +380,7 @@ protected:
             outCommandSQM.write(cmdSQM, rplSQM);
 
             //  reroute superquadric parameters
-            Bottle &superquadric_params = outSuperquadric.prepare();
+            Property &superquadric_params = outSuperquadric.prepare();
             superquadric_params = rplSQM;
 
             //  stream superquadric params and related point cloud simultaneously
