@@ -95,6 +95,9 @@ protected:
     BufferedPort< Matrix > outPort;
     BufferedPort<ImageOf<PixelRgb>> inImgPort;
 
+    BufferedPort<Bottle> outSuperquadric;         //  port to stream superquadric parameters
+    RpcClient outCommandSQM;                        //  rpc port to query superquadric-model for stuff
+
     Mutex mutex;
 
     string moduleName;
@@ -345,12 +348,42 @@ protected:
             Matrix &matPointCloud = outPort.prepare();
             matPointCloud.resize(pointCloud.size(), 6);
             matPointCloud.zero();
+
+            //  HACKING ORIGINAL MODULE WITH STUFF
+
+            Bottle cmdSQM, rplSQM;
+
+            cmdSQM.addString("get_superq");
+
+            Bottle &pc = cmdSQM.addList();
+
             //  send point cloud on output port
             for (int idx_point = 0; idx_point < pointCloud.size(); idx_point++)
             {
+                Bottle &p = pc.addList();
+                p.addDouble(pointCloud.at(idx_point).x);
+                p.addDouble(pointCloud.at(idx_point).y);
+                p.addDouble(pointCloud.at(idx_point).z);
+
                 if (!matPointCloud.setRow(idx_point, pointCloud.at(idx_point).toYarpVectorRGB()))
                     yError() << "Failed at writing point" << idx_point << "on output port";
             }
+
+            //  no filtered superquadric
+            cmdSQM.addInt(0);
+
+            //  reset superquadric
+            cmdSQM.addInt(1);
+
+            //  send rpc command, get response
+            outCommandSQM.write(cmdSQM, rplSQM);
+
+            //  reroute superquadric parameters
+            Bottle &superquadric_params = outSuperquadric.prepare();
+            superquadric_params = rplSQM;
+
+            //  stream superquadric params and related point cloud simultaneously
+            outSuperquadric.write();
 
             //  farewell, point cloud
             outPort.write();
@@ -523,6 +556,9 @@ public:
         okOpen &= outCommandSegm.open("/" + moduleName + "/segmrpc");
         okOpen &= outPort.open("/" + moduleName + "/pointCloud:o");
 
+        okOpen &= outCommandSQM.open("/" + moduleName + "/SQMrpc");
+        okOpen &= outSuperquadric.open("/" + moduleName + "/superquadricParams:o");
+
         if (!okOpen)
         {
             yError() << "Unable to open ports!";
@@ -545,6 +581,9 @@ public:
         outCommandSFM.interrupt();
         outCommandSegm.interrupt();
 
+        outCommandSQM.interrupt();
+        outSuperquadric.interrupt();
+
         return true;
 
     }
@@ -558,91 +597,12 @@ public:
         outCommandSegm.close();
         outPort.close();
 
+        outCommandSQM.close();
+        outSuperquadric.close();
+
         return true;
 
     }
-
-//    bool respond(const Bottle &command, Bottle &reply)
-//    {
-//        //  change operation mode based on command and available modes
-//        mutex.lock();
-
-//        string modeCmd = command.get(0).asString();
-
-//        if (modeCmd == "stream_one")
-//        {
-//            //  check that object name is present
-//            if (command.size() == 2)
-//            {
-//                objectToFind = command.get(1).asString();
-//                if(streamSinglePointCloud())
-//                {
-//                    reply.addString("ack");
-//                }
-//                else
-//                {
-//                    reply.addString("nack");
-//                }
-//            }
-//            else
-//                reply.addString("nack");
-
-//        }
-//        else if (modeCmd == "stream_many")
-//        {
-//            //  check that object name is present
-//            if (command.size() == 2)
-//            {
-//                operationMode = OpMode::OP_MODE_STREAM_MANY;
-//                objectToFind = command.get(1).asString();
-//                reply.addString("ack");
-//            }
-//            else
-//                reply.addString("nack");
-//        }
-//        else if (modeCmd == "dump_one")
-//        {
-//            //  check that object name is present
-//            if (command.size() == 2)
-//            {
-//                objectToFind = command.get(1).asString();
-//                if (dumpPointCloud())
-//                {
-//                    reply.addString("ack");
-//                }
-//                else
-//                    reply.addString("nack");
-//            }
-//            else
-//                reply.addString("nack");
-//        }
-//        else if (modeCmd == "stop_stream")
-//        {
-//            operationMode = OpMode::OP_MODE_NONE;
-//            reply.addString("ack");
-//        }
-//        else if (modeCmd == "help")
-//        {
-//            reply.addString("Available commands:");
-//            reply.addString("- stream_one [object_name]");
-//            reply.addString("- stream_many [object_name]");
-//            reply.addString("- dump_one [object_name]");
-//            reply.addString("- stop_stream");
-//            reply.addString("- quit");
-//        }
-//        else if (modeCmd == "quit")
-//        {
-//            mutex.unlock();
-//            return RFModule::respond(command, reply);
-//        }
-//        else
-//            reply.addString("Invalid command. Type help for available commands");
-
-//        mutex.unlock();
-
-//        return true;
-
-//    }
 
     double getPeriod()
     {
