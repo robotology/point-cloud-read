@@ -376,12 +376,16 @@ protected:
             //  reset superquadric
             cmdSQM.addInt(1);
 
+            yDebug() << "COMMAND TO SUPERQ-MODEL:" << cmdSQM.toString();
+
             //  send rpc command, get response
             outCommandSQM.write(cmdSQM, rplSQM);
 
             //  reroute superquadric parameters
             Property &superquadric_params = outSuperquadric.prepare();
             superquadric_params = rplSQM;
+
+            yDebug() << "REPLY FROM SUPERQ-MODEL:" << rplSQM.toString();
 
             //  stream superquadric params and related point cloud simultaneously
             outSuperquadric.write();
