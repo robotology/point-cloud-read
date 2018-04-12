@@ -18,6 +18,8 @@
 #include <fstream>
 #include <deque>
 
+#include <climits>
+
 #include <PCR_IDL.h>
 
 using namespace std;
@@ -72,6 +74,25 @@ public:
         
         return point_vec;
     }
+
+    DataXYZRGBA toYarpXYZRGBA()
+    {
+        DataXYZRGBA point;
+
+        point.x = this->x;
+        point.y = this->y;
+        point.z = this->z;
+        point.r = this->r;
+        point.g = this->b;
+        point.b = this->b;
+
+        //  set the alpha channel to one
+        point.a = UCHAR_MAX;
+
+        return point;
+
+    }
+
 };
 
 class PointCloudReadModule: public RFModule,
@@ -92,7 +113,7 @@ protected:
     RpcClient outCommandSFM;
     RpcClient outCommandSegm;
 
-    BufferedPort< Matrix > outPort;
+    BufferedPort<PointCloud<DataXYZRGBA>> outPort;
     BufferedPort<ImageOf<PixelRgb>> inImgPort;
 
     BufferedPort<Bottle> outBottlePointCloud;
@@ -337,34 +358,190 @@ protected:
 
     }
 
+    bool retrieveObjectPointCloud(PointCloud<DataXYZRGBA> &objectPointCloud)
+    {
+        //  get object bounding box given object name
+
+        Vector bb_top_left, bb_bot_right;
+
+        if (retrieveObjectBoundingBox(objectToFind, bb_top_left, bb_bot_right))
+        {
+            int width   = abs(bb_bot_right(0) - bb_top_left(0)) + 1;
+            int height  = abs(bb_bot_right(1) - bb_top_left(1)) + 1;
+
+            //  get list of points that belong to the object from lbpextract
+            //  command message format: [get_component_around x y]
+            int center_bb_x = bb_top_left(0) + width/2;
+            int center_bb_y = bb_top_left(1) + (bb_bot_right(1) - bb_top_left(1))/2;
+
+            Bottle cmdSeg, replySeg;
+            cmdSeg.addString("get_component_around");
+            cmdSeg.addInt(center_bb_x);
+            cmdSeg.addInt(center_bb_y);
+
+            if (!outCommandSegm.write(cmdSeg,replySeg)){
+                yError() << "Could not write to segmentation RPC port";
+                return false;
+            }
+
+            yDebug() << "Segmented point list obtained from segmentation module";
+
+            //  lbpExtract replies with a list of points
+            if (replySeg.size() < 1)
+                {
+                yError() << "Empty point list retrieved from segmentation module!" ;
+                return false;
+                }
+
+            Bottle *pointList = replySeg.get(0).asList();
+
+            if (pointList->size() > 0){
+
+                //  each point is a list of 2 coordinates
+                //  build one list of points to query SFM for 3d coordinates
+                Bottle cmdSFM, replySFM;
+                cmdSFM.addString("Points");
+
+                yDebug() << "Retrieved " << pointList->size() << " 2D points.";
+
+                for (int point_idx=0; point_idx < pointList->size(); point_idx++)
+                {
+                Bottle *point2D = pointList->get(point_idx).asList();
+                cmdSFM.addInt(point2D->get(0).asInt());
+                cmdSFM.addInt(point2D->get(1).asInt());
+                }
+
+                //yDebug() << "Query: " << cmdSFM.toString();
+
+                if (!outCommandSFM.write(cmdSFM, replySFM))
+                {
+                    yError() << "Could not write to SFM RPC port";
+                    return false;
+                }
+
+                yDebug() << "3D point list obtained from SFM";
+
+                //  acquire image from camera input
+                ImageOf<PixelRgb> *inCamImg = inImgPort.read();
+
+                yDebug() << "Image obtained from camera stream";
+
+                //  empty point cloud
+                objectPointCloud.clear();
+
+                yDebug() << "Reply from SFM obtained. Cycling through " << pointList->size() << " 3D points...";
+
+                for (int point_idx = 0; point_idx < replySFM.size()/3; point_idx++)
+                {
+                    double x = replySFM.get(point_idx*3).asDouble();   // x value
+                    double y = replySFM.get(point_idx*3+1).asDouble();   // y value
+                    double z = replySFM.get(point_idx*3+2).asDouble();   // z value
+
+                    //yDebug() << x << y << z;
+
+                    //  0 0 0 points are invalid and must be discarded
+                    if (x==0.0 && y==0.0 && z==0.0)
+                        continue;
+
+                    //  fetch rgb from image according to 2D coordinates
+                    Bottle *point2D = pointList->get(point_idx).asList();
+                    PixelRgb point_rgb = inCamImg->pixel(point2D->get(0).asInt(), point2D->get(1).asInt());
+
+                    //  bake the yarp 3D point struct
+                    DataXYZRGBA point3D;
+                    point3D.x = x;
+                    point3D.y = y;
+                    point3D.z = z;
+                    point3D.r = point_rgb.r;
+                    point3D.g = point_rgb.g;
+                    point3D.b = point_rgb.b;
+                    point3D.a = UCHAR_MAX;
+
+                    objectPointCloud.push_back(point3D);
+                }
+
+                yInfo() << "Point cloud retrieved: " << objectPointCloud.size() << " points stored.";
+
+                return true;
+            }
+            else
+            {
+                yError() << "Empty point cloud retrieved for object " << objectToFind;
+                return false;
+            }
+
+        }
+        else
+        {
+            yError() << "Could not retrieve bounding box for object " << objectToFind;
+            return false;
+        }
+    }
+
+//    bool streamSinglePointCloud()
+//    {
+//        //  retrieve object point cloud
+//        deque<Point3DRGB> pointCloud;
+
+//        if (retrieveObjectPointCloud(pointCloud))
+//        {
+//            Matrix &matPointCloud = outPort.prepare();
+//            matPointCloud.resize(pointCloud.size(), 6);
+//            matPointCloud.zero();
+
+//            //  HACKING ORIGINAL MODULE WITH STUFF
+
+//            Bottle &cmdSQM = outBottlePointCloud.prepare();
+//            Property rplSQM;
+
+//            Bottle &pc = cmdSQM.addList();
+
+//            //  send point cloud on output port
+//            for (int idx_point = 0; idx_point < pointCloud.size(); idx_point++)
+//            {
+//                Bottle &p = pc.addList();
+//                p.addDouble(pointCloud.at(idx_point).x);
+//                p.addDouble(pointCloud.at(idx_point).y);
+//                p.addDouble(pointCloud.at(idx_point).z);
+
+//                if (!matPointCloud.setRow(idx_point, pointCloud.at(idx_point).toYarpVectorRGB()))
+//                    yError() << "Failed at writing point" << idx_point << "on output port";
+//            }
+
+//            yDebug() << "COMMAND TO SUPERQ-MODEL:" << cmdSQM.toString();
+
+//            //  send rpc command, get response
+//            outBottlePointCloud.write();
+
+//            //  farewell, point cloud
+//            outPort.write();
+//            return true;
+//        }
+//        else
+//        {
+//            yError() << "Could not retrieve point cloud for object " << objectToFind;
+//            return false;
+//        }
+//    }
+
     bool streamSinglePointCloud()
     {
         //  retrieve object point cloud
-        deque<Point3DRGB> pointCloud;
+        PointCloud<DataXYZRGBA> &pointCloud = outPort.prepare();
 
         if (retrieveObjectPointCloud(pointCloud))
         {
-            Matrix &matPointCloud = outPort.prepare();
-            matPointCloud.resize(pointCloud.size(), 6);
-            matPointCloud.zero();
-
-            //  HACKING ORIGINAL MODULE WITH STUFF
-
+            //  prepare the command to sent to superquadric-model
             Bottle &cmdSQM = outBottlePointCloud.prepare();
-            Property rplSQM;
-
             Bottle &pc = cmdSQM.addList();
 
             //  send point cloud on output port
-            for (int idx_point = 0; idx_point < pointCloud.size(); idx_point++)
+            for (int idx_point = 0; idx_point < pointCloud.width() * pointCloud.height(); idx_point++)
             {
                 Bottle &p = pc.addList();
-                p.addDouble(pointCloud.at(idx_point).x);
-                p.addDouble(pointCloud.at(idx_point).y);
-                p.addDouble(pointCloud.at(idx_point).z);
-
-                if (!matPointCloud.setRow(idx_point, pointCloud.at(idx_point).toYarpVectorRGB()))
-                    yError() << "Failed at writing point" << idx_point << "on output port";
+                p.addDouble(pointCloud(idx_point).x);
+                p.addDouble(pointCloud(idx_point).y);
+                p.addDouble(pointCloud(idx_point).z);
             }
 
             yDebug() << "COMMAND TO SUPERQ-MODEL:" << cmdSQM.toString();
@@ -429,9 +606,56 @@ protected:
 
     }
 
+    int dumpToOFFFile(const string &filename, PointCloud<DataXYZRGBA> &pointCloud)
+    {
+        fstream dumpFile;
+        string filename_n_ext;
+
+        //  if file already exists, create one with different name
+        for(int file_n=0; file_n<1000; file_n++)
+        {
+            string file_num = std::to_string(file_n);
+            file_num.insert(file_num.begin(), 3-file_num.length(), '0');
+            filename_n_ext = filename + "_" + file_num + ".off";
+            //  check if file can be accessed
+            fstream f(filename_n_ext.c_str());
+            if (!f.good())
+                break;
+        }
+
+        dumpFile.open(filename_n_ext, ios::out);
+
+        if (dumpFile.is_open()){
+            int n_points = pointCloud.width() * pointCloud.height();
+
+            dumpFile << "COFF"               << "\n";
+            dumpFile << n_points << " 0 0"  << "\n";
+
+            for (int idx_point = 0; idx_point < n_points; idx_point++)
+            {
+                //  add xyz rgb
+                //dumpFile << pointCloud.at(idx_point).toYarpVectorRGB().toString() << "\n";
+                dumpFile << pointCloud(idx_point).x << " ";
+                dumpFile << pointCloud(idx_point).y << " ";
+                dumpFile << pointCloud(idx_point).z << " ";
+                dumpFile << (int)pointCloud(idx_point).r << " ";
+                dumpFile << (int)pointCloud(idx_point).g << " ";
+                dumpFile << (int)pointCloud(idx_point).b << "\n";
+            }
+
+            dumpFile.close();
+
+            return 0;
+        }
+
+        return -1;
+
+    }
+
     bool dumpPointCloud(){
 
-        deque<Point3DRGB> yarpCloud;
+        //deque<Point3DRGB> yarpCloud;
+        PointCloud<DataXYZRGBA> yarpCloud;
 
         if (retrieveObjectPointCloud(yarpCloud))
         {
