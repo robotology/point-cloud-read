@@ -12,11 +12,13 @@
 #include <yarp/sig/all.h>
 #include <yarp/dev/all.h>
 #include <yarp/math/Math.h>
+#include <yarp/pcl/Pcl.h>
 
 #include <string>
 #include <iostream>
 #include <fstream>
 #include <deque>
+#include <algorithm>
 
 #include <climits>
 
@@ -478,52 +480,6 @@ protected:
         }
     }
 
-//    bool streamSinglePointCloud()
-//    {
-//        //  retrieve object point cloud
-//        deque<Point3DRGB> pointCloud;
-
-//        if (retrieveObjectPointCloud(pointCloud))
-//        {
-//            Matrix &matPointCloud = outPort.prepare();
-//            matPointCloud.resize(pointCloud.size(), 6);
-//            matPointCloud.zero();
-
-//            //  HACKING ORIGINAL MODULE WITH STUFF
-
-//            Bottle &cmdSQM = outBottlePointCloud.prepare();
-//            Property rplSQM;
-
-//            Bottle &pc = cmdSQM.addList();
-
-//            //  send point cloud on output port
-//            for (int idx_point = 0; idx_point < pointCloud.size(); idx_point++)
-//            {
-//                Bottle &p = pc.addList();
-//                p.addDouble(pointCloud.at(idx_point).x);
-//                p.addDouble(pointCloud.at(idx_point).y);
-//                p.addDouble(pointCloud.at(idx_point).z);
-
-//                if (!matPointCloud.setRow(idx_point, pointCloud.at(idx_point).toYarpVectorRGB()))
-//                    yError() << "Failed at writing point" << idx_point << "on output port";
-//            }
-
-//            yDebug() << "COMMAND TO SUPERQ-MODEL:" << cmdSQM.toString();
-
-//            //  send rpc command, get response
-//            outBottlePointCloud.write();
-
-//            //  farewell, point cloud
-//            outPort.write();
-//            return true;
-//        }
-//        else
-//        {
-//            yError() << "Could not retrieve point cloud for object " << objectToFind;
-//            return false;
-//        }
-//    }
-
     bool streamSinglePointCloud()
     {
         //  retrieve object point cloud
@@ -652,23 +608,62 @@ protected:
 
     }
 
-    bool dumpPointCloud(){
+    int dumpToPCDFile(const string &filename, const PointCloud<DataXYZRGBA> &pointCloud)
+    {
 
-        //deque<Point3DRGB> yarpCloud;
+        string filename_n_ext;
+
+        //  if file already exists, create one with different name
+        for(int file_n=0; file_n<1000; file_n++)
+        {
+            string file_num = std::to_string(file_n);
+            file_num.insert(file_num.begin(), 3-file_num.length(), '0');
+            filename_n_ext = filename + "_" + file_num + ".pcd";
+            //  check if file can be accessed
+            fstream f(filename_n_ext.c_str());
+            if (!f.good())
+                break;
+        }
+
+        return yarp::pcl::savePCD< yarp::sig::DataXYZRGBA, pcl::PointXYZRGBA>(filename_n_ext, pointCloud);
+
+    }
+
+    bool dumpPointCloud(const string &format){
+
         PointCloud<DataXYZRGBA> yarpCloud;
 
         if (retrieveObjectPointCloud(yarpCloud))
         {
             //  dump point cloud to file
             string dumpFileName = objectToFind + "_" + baseDumpFileName;
-            if (dumpToOFFFile(dumpFileName, yarpCloud) == 0)
-            {
-                yInfo() << "Dumped point cloud in OFF format.";
-                return true;
 
+            string string_format_lowercase = format;
+            transform(string_format_lowercase.begin(), string_format_lowercase.end(), string_format_lowercase.begin(), ::tolower);
+            if (string_format_lowercase.compare("off") == 0)
+            {
+                if (dumpToOFFFile(dumpFileName, yarpCloud) == 0)
+                {
+                    yInfo() << "Dumped point cloud in OFF format.";
+                    return true;
+
+                }
+                else
+                    yError() << "Dump failed!";
+            }
+            else if (string_format_lowercase.compare("pcd") == 0)
+            {
+                if (dumpToPCDFile(dumpFileName, yarpCloud) == 0)
+                {
+                    yInfo() << "Dumped point cloud in PCD format.";
+                    return true;
+
+                }
+                else
+                    yError() << "Dump failed!";
             }
             else
-                yError() << "Dump failed!";
+                yError() << "Invalid dump format.";
         }
         else
             yError() << "Could not retrieve object point cloud";
@@ -721,14 +716,14 @@ protected:
 
     }
 
-    bool dump_one(const string &object)
+    bool dump_one(const string &object, const string &format)
     {
         mutex.lock();
 
         objectToFind = object;
         operationMode = OpMode::OP_MODE_DUMP_ONE;
 
-        bool reply = dumpPointCloud();
+        bool reply = dumpPointCloud(format);
 
         operationMode = OpMode::OP_MODE_NONE;
 
