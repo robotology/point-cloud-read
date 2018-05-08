@@ -7,18 +7,19 @@ project(point-cloud-read)
 # mandatory use of these packages
 find_package(YARP REQUIRED)
 find_package(ICUBcontrib REQUIRED)
-#find_package(PCL REQUIRED)
+find_package(PCL 1.2 REQUIRED)
 
 # add PCL library
-#include_directories(${PCL_INCLUDE_DIRS} )
-#link_directories(${PCL_LIBRARY_DIRS} )
+include_directories(${PCL_INCLUDE_DIRS} )
+link_directories(${PCL_LIBRARY_DIRS} )
 
 # Fix some PCL bug related to Ubuntu
-#list(REMOVE_ITEM PCL_LIBRARIES "vtkproj4")
+list(REMOVE_ITEM PCL_LIBRARIES "vtkproj4")
 
 # extend the current search path used by cmake to load helpers
 list(APPEND CMAKE_MODULE_PATH ${YARP_MODULE_PATH})
 list(APPEND CMAKE_MODULE_PATH ${ICUBCONTRIB_MODULE_PATH})
+add_definitions(${PCL_DEFINITIONS})
 
 # helpers defining certain macros (e.g. "yarp_install")
 include(YarpIDL)
