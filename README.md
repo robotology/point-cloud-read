@@ -27,7 +27,7 @@ Typing `help` as rpc command returns a list of available commands, here briefly 
 - `stream_start objectName` starts the point cloud stream of an object recognized as `objectName` in the scene with period `periodInSeconds`. Empty point clouds are streamed if no `objectName` is found in the scene
 - `stream_stop` stops the point cloud stream
 - `stream_one objectName` triggers a one-shot acquisition and streaming. If no `objectName` is found in the scene, the command fails 
-- `dump_one objectName` commands the module to acquire a point cloud and dump it to a .off file in the format `objectName_point_cloud_XXX.off`, where `XXX` is a zero-filled number that increases when more point clouds of the same object are dumped. Such file is easily readable with programs such as MeshLab.
+- `dump_one objectName format` commands the module to acquire a point cloud and dump it to a file in the `.off` or `.pcd` format. The resulting file will be `objectName_point_cloud_XXX.[off|pcd]`, where `XXX` is a zero-filled number that increases when more point clouds of the same object are dumped. Such file is easily readable with programs such as MeshLab.
 
 
 
