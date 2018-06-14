@@ -130,7 +130,7 @@ protected:
 
     OpMode operationMode;
 
-    bool attach(RpcServer &source)
+    bool attach(RpcServer &source) override
     {
         return this->yarp().attachAsServer(source);
     }
@@ -672,12 +672,32 @@ protected:
 
     }
 
+    PointCloud<DataXYZRGBA> get_point_cloud(const string &object) override
+    {
+        mutex.lock();
+
+        //  log object that is being looked for
+        objectToFind = object;
+        operationMode = OpMode::OP_MODE_STREAM_ONE;
+
+        PointCloud<DataXYZRGBA> retrievedPointCloud;
+        retrievedPointCloud.clear();
+        retrieveObjectPointCloud(retrievedPointCloud);
+
+        operationMode = OpMode::OP_MODE_NONE;
+
+        mutex.unlock();
+
+        return retrievedPointCloud;
+
+    }
+
     bool stream_one(const string &object) override
     {
         mutex.lock();
 
         //  log object that is being looked for
-        objectToFind = object;\
+        objectToFind = object;
         operationMode = OpMode::OP_MODE_STREAM_ONE;
 
         //  one-shot acquisition and streaming of point cloud
@@ -691,7 +711,7 @@ protected:
 
     }
 
-    bool stream_start(const string &object)
+    bool stream_start(const string &object) override
     {
         mutex.lock();
 
@@ -704,7 +724,7 @@ protected:
         return true;
     }
 
-    bool stream_stop()
+    bool stream_stop() override
     {
         mutex.lock();
 
@@ -716,7 +736,7 @@ protected:
 
     }
 
-    bool dump_one(const string &object, const string &format)
+    bool dump_one(const string &object, const string &format) override
     {
         mutex.lock();
 
@@ -733,7 +753,7 @@ protected:
 
     }    
 
-    bool set_period(const double modulePeriod)
+    bool set_period(const double modulePeriod) override
     {
         moduleUpdatePeriod = modulePeriod;
 
@@ -745,7 +765,7 @@ protected:
 
 public:
 
-    bool configure(ResourceFinder &rf)
+    bool configure(ResourceFinder &rf) override
     {
         moduleName = "pointCloudRead";
         baseDumpFileName = "point_cloud";
@@ -778,7 +798,7 @@ public:
 
     }
 
-    bool interruptModule()
+    bool interruptModule() override
     {
         inCommandPort.interrupt();
         inImgPort.interrupt();
@@ -792,7 +812,7 @@ public:
 
     }
 
-    bool close()
+    bool close() override
     {
         inCommandPort.close();
         inImgPort.close();
@@ -807,12 +827,12 @@ public:
 
     }
 
-    double getPeriod()
+    double getPeriod() override
     {
         return moduleUpdatePeriod;
     }
 
-    bool updateModule()
+    bool updateModule() override
     {
         mutex.lock();
 
