@@ -674,7 +674,7 @@ protected:
 
     PointCloud<DataXYZRGBA> get_point_cloud(const string &object) override
     {
-        mutex.lock();
+        LockGuard lg(mutex);
 
         //  log previous operation mode
         OpMode backupOperationMode = operationMode;
@@ -685,8 +685,6 @@ protected:
         retrieveObjectPointCloud(retrievedPointCloud, object);
 
         operationMode = backupOperationMode;
-
-        mutex.unlock();
 
         return retrievedPointCloud;
 
