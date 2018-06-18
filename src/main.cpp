@@ -672,7 +672,7 @@ protected:
 
     }
 
-    PointCloud<DataXYZRGBA> get_point_cloud(const string &object) override
+    Bottle get_point_cloud(const string &object) override
     {
         LockGuard lg(mutex);
 
@@ -686,7 +686,11 @@ protected:
 
         operationMode = backupOperationMode;
 
-        return retrievedPointCloud;
+        yDebug() << "Retrieved " << retrievedPointCloud.size() << "points.";
+
+        Bottle reply = retrievedPointCloud.toBottle();
+
+        return reply;
 
     }
 
