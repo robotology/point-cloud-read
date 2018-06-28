@@ -130,7 +130,7 @@ protected:
 
     OpMode operationMode;
 
-    bool attach(RpcServer &source)
+    bool attach(RpcServer &source) override
     {
         return this->yarp().attachAsServer(source);
     }
@@ -360,13 +360,13 @@ protected:
 
     }
 
-    bool retrieveObjectPointCloud(PointCloud<DataXYZRGBA> &objectPointCloud)
+    bool retrieveObjectPointCloud(PointCloud<DataXYZRGBA> &objectPointCloud, const string &object)
     {
         //  get object bounding box given object name
 
         Vector bb_top_left, bb_bot_right;
 
-        if (retrieveObjectBoundingBox(objectToFind, bb_top_left, bb_bot_right))
+        if (retrieveObjectBoundingBox(object, bb_top_left, bb_bot_right))
         {
             int width   = abs(bb_bot_right(0) - bb_top_left(0)) + 1;
             int height  = abs(bb_bot_right(1) - bb_top_left(1)) + 1;
@@ -468,24 +468,24 @@ protected:
             }
             else
             {
-                yError() << "Empty point cloud retrieved for object " << objectToFind;
+                yError() << "Empty point cloud retrieved for object " << object;
                 return false;
             }
 
         }
         else
         {
-            yError() << "Could not retrieve bounding box for object " << objectToFind;
+            yError() << "Could not retrieve bounding box for object " << object;
             return false;
         }
     }
 
-    bool streamSinglePointCloud()
+    bool streamSinglePointCloud(const string &object)
     {
         //  retrieve object point cloud
         PointCloud<DataXYZRGBA> &pointCloud = outPort.prepare();
 
-        if (retrieveObjectPointCloud(pointCloud))
+        if (retrieveObjectPointCloud(pointCloud, object))
         {
             //  prepare the command to sent to superquadric-model
             Bottle &cmdSQM = outBottlePointCloud.prepare();
@@ -511,7 +511,7 @@ protected:
         }
         else
         {
-            yError() << "Could not retrieve point cloud for object " << objectToFind;
+            yError() << "Could not retrieve point cloud for object " << object;
             return false;
         }
     }
@@ -629,14 +629,14 @@ protected:
 
     }
 
-    bool dumpPointCloud(const string &format){
+    bool dumpPointCloud(const string &format, const string &object){
 
         PointCloud<DataXYZRGBA> yarpCloud;
 
-        if (retrieveObjectPointCloud(yarpCloud))
+        if (retrieveObjectPointCloud(yarpCloud, object))
         {
             //  dump point cloud to file
-            string dumpFileName = objectToFind + "_" + baseDumpFileName;
+            string dumpFileName = object + "_" + baseDumpFileName;
 
             string string_format_lowercase = format;
             transform(string_format_lowercase.begin(), string_format_lowercase.end(), string_format_lowercase.begin(), ::tolower);
@@ -672,18 +672,40 @@ protected:
 
     }
 
+    Bottle get_point_cloud(const string &object) override
+    {
+        LockGuard lg(mutex);
+
+        //  log previous operation mode
+        OpMode backupOperationMode = operationMode;
+        operationMode = OpMode::OP_MODE_STREAM_ONE;
+
+        PointCloud<DataXYZRGBA> retrievedPointCloud;
+        retrievedPointCloud.clear();
+        retrieveObjectPointCloud(retrievedPointCloud, object);
+
+        operationMode = backupOperationMode;
+
+        yDebug() << "Retrieved " << retrievedPointCloud.size() << "points.";
+
+        Bottle reply = retrievedPointCloud.toBottle();
+
+        return reply;
+
+    }
+
     bool stream_one(const string &object) override
     {
         mutex.lock();
 
-        //  log object that is being looked for
-        objectToFind = object;\
+        //  back up operation mode
+        OpMode backupOperationMode = operationMode;
         operationMode = OpMode::OP_MODE_STREAM_ONE;
 
         //  one-shot acquisition and streaming of point cloud
-        bool reply = streamSinglePointCloud();
+        bool reply = streamSinglePointCloud(object);
 
-        operationMode = OpMode::OP_MODE_NONE;
+        operationMode = backupOperationMode;
 
         mutex.unlock();
 
@@ -691,7 +713,7 @@ protected:
 
     }
 
-    bool stream_start(const string &object)
+    bool stream_start(const string &object) override
     {
         mutex.lock();
 
@@ -704,10 +726,11 @@ protected:
         return true;
     }
 
-    bool stream_stop()
+    bool stream_stop() override
     {
         mutex.lock();
 
+        objectToFind.clear();
         operationMode = OpMode::OP_MODE_NONE;
 
         mutex.unlock();
@@ -716,16 +739,16 @@ protected:
 
     }
 
-    bool dump_one(const string &object, const string &format)
+    bool dump_one(const string &object, const string &format) override
     {
         mutex.lock();
 
-        objectToFind = object;
+        OpMode backupOperationMode = operationMode;
         operationMode = OpMode::OP_MODE_DUMP_ONE;
 
-        bool reply = dumpPointCloud(format);
+        bool reply = dumpPointCloud(format, object);
 
-        operationMode = OpMode::OP_MODE_NONE;
+        operationMode = backupOperationMode;
 
         mutex.unlock();
 
@@ -733,7 +756,7 @@ protected:
 
     }    
 
-    bool set_period(const double modulePeriod)
+    bool set_period(const double modulePeriod) override
     {
         moduleUpdatePeriod = modulePeriod;
 
@@ -745,7 +768,7 @@ protected:
 
 public:
 
-    bool configure(ResourceFinder &rf)
+    bool configure(ResourceFinder &rf) override
     {
         moduleName = "pointCloudRead";
         baseDumpFileName = "point_cloud";
@@ -778,7 +801,7 @@ public:
 
     }
 
-    bool interruptModule()
+    bool interruptModule() override
     {
         inCommandPort.interrupt();
         inImgPort.interrupt();
@@ -792,7 +815,7 @@ public:
 
     }
 
-    bool close()
+    bool close() override
     {
         inCommandPort.close();
         inImgPort.close();
@@ -807,18 +830,18 @@ public:
 
     }
 
-    double getPeriod()
+    double getPeriod() override
     {
         return moduleUpdatePeriod;
     }
 
-    bool updateModule()
+    bool updateModule() override
     {
         mutex.lock();
 
         if (operationMode == OpMode::OP_MODE_STREAM_MANY)
         {
-            streamSinglePointCloud();
+            streamSinglePointCloud(objectToFind);
         }
         else if (operationMode == OpMode::OP_MODE_NONE)
         {

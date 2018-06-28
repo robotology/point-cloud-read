@@ -1,4 +1,20 @@
+struct PointCloud
+{
+} 	(
+	yarp.name = "yarp::sig::PointCloud<yarp::sig::DataXYZRGBA>"
+	yarp.includefile = "yarp/sig/PointCloud.h"
+	)
+
+struct Bottle
+{
+} (
+   yarp.name = "yarp::os::Bottle"
+   yarp.includefile="yarp/os/Bottle.h"
+  )
+
+
 service PCR_IDL {
+    Bottle get_point_cloud(1:string objectToFind);
     bool stream_one(1:string objectToFind);
     bool stream_start(1:string objectToFind);
     bool stream_stop();
