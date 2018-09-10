@@ -500,8 +500,6 @@ protected:
                 p.addDouble(pointCloud(idx_point).z);
             }
 
-            yDebug() << "COMMAND TO SUPERQ-MODEL:" << cmdSQM.toString();
-
             //  send rpc command, get response
             outBottlePointCloud.write();
 
