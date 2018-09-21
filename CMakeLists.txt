@@ -5,20 +5,22 @@ cmake_minimum_required(VERSION 3.5)
 project(point-cloud-read)
 
 # mandatory use of these packages
-find_package(YARP 3.0.101 REQUIRED COMPONENTS OS sig dev math pcl)
-find_package(PCL 1.2 REQUIRED)
+find_package(YARP 3.0.101 REQUIRED COMPONENTS math OS sig pcl)
+# finding the yarp pcl component already implies finding pcl. 
+# pcl cmake is broken and the linking crashes if find_package is called multiple times.
+#find_package(PCL 1.2 REQUIRED)
 find_package(ICUBcontrib REQUIRED)
 
 # add PCL library
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
+add_definitions(${PCL_DEFINITIONS})
 
 # Fix some PCL bug related to Ubuntu
 list(REMOVE_ITEM PCL_LIBRARIES "vtkproj4")
 
 # extend the current search path used by cmake to load helpers
 list(APPEND CMAKE_MODULE_PATH ${ICUBCONTRIB_MODULE_PATH})
-add_definitions(${PCL_DEFINITIONS})
 
 # helpers defining certain macros
 include(ICUBcontribHelpers)
@@ -29,13 +31,11 @@ icubcontrib_set_default_prefix()
 
 yarp_idl_to_dir(idl.thrift ${CMAKE_SOURCE_DIR})
 
-#set(generated_libs_dir "${CMAKE_CURRENT_SOURCE_DIR}")
-#yarp_idl_to_dir(src/idl.thrift ${CMAKE_BINARY_DIR}/idl IDL_SRC IDL_HDR IDL_INCLUDE)
 include(idl_thrift.cmake)
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
-add_executable(${PROJECT_NAME} src/main.cpp ${headers} ${sources})
-target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} YARP::YARP_math YARP::YARP_pcl
+add_executable(${PROJECT_NAME} src/main.cpp)
+target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES}
                                       ${PCL_LIBRARIES})
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 
