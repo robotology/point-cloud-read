@@ -22,7 +22,7 @@
 
 #include <climits>
 
-#include <PCR_IDL.h>
+#include <src/PCR_IDL.h>
 
 using namespace std;
 using namespace yarp::os;

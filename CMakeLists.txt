@@ -6,6 +6,8 @@ project(point-cloud-read)
 
 # set some names
 set(EXEC_TARGET_NAME "point-cloud-read")
+set(${EXEC_TARGET_NAME}_THRIFT src/idl.thrift)
+set(${EXEC_TARGET_NAME}_SRC src/main.cpp)
 
 # mandatory use of these packages
 find_package(YARP 3.0.101 REQUIRED COMPONENTS 
@@ -39,22 +41,14 @@ include(ICUBcontribOptions)
 # specify to install in $ICUBcontrib_DIR/bin
 icubcontrib_set_default_prefix()
 
-# set some more names
-set(${EXEC_TARGET_NAME}_THRIFT idl.thrift)
-set(${EXEC_TARGET_NAME}_SRC src/main.cpp)
-
 # generate idl source and header
 yarp_add_idl(${EXEC_TARGET_NAME}_THRIFT_SRC ${${EXEC_TARGET_NAME}_THRIFT})
 
 # set the executable 
 add_executable(${EXEC_TARGET_NAME} 
-                                    ${${EXEC_TARGET_NAME}_SRC} 
+                                    ${${EXEC_TARGET_NAME}_SRC}
+                                    ${${EXEC_TARGET_NAME}_THRIFT} 
                                     ${${EXEC_TARGET_NAME}_THRIFT_SRC}
-)
-
-target_include_directories(${EXEC_TARGET_NAME} 
-                                                PRIVATE 
-                                                        "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
 target_link_libraries(${EXEC_TARGET_NAME} 
