@@ -741,6 +741,32 @@ protected:
 
     }
 
+    Bottle get_point_cloud_from_3D_position(double x, double y, double z) override
+    {
+        LockGuard lg(mutex);
+
+        //  log previous operation mode
+        OpMode backupOperationMode = operationMode;
+        operationMode = OpMode::OP_MODE_STREAM_ONE;
+
+        PointCloud<DataXYZRGBA> retrievedPointCloud;
+        retrievedPointCloud.clear();
+        Vector position(3);
+        position(0) = x;
+        position(1) = y;
+        position(2) = z;
+        retrieveObjectPointCloudFrom3DPosition(retrievedPointCloud, position);
+
+        operationMode = backupOperationMode;
+
+        yDebug() << "Retrieved " << retrievedPointCloud.size() << "points.";
+
+        Bottle reply = retrievedPointCloud.toBottle();
+
+        return reply;
+
+    }
+
     bool stream_one(const string &object) override
     {
         mutex.lock();
