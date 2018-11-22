@@ -9,6 +9,10 @@ set(EXEC_TARGET_NAME "point-cloud-read")
 set(${EXEC_TARGET_NAME}_THRIFT src/idl.thrift)
 set(${EXEC_TARGET_NAME}_SRC src/main.cpp)
 
+# create a variable for the list of required YARP modules
+# this is needed since find_package(ICUBcontrib) overrides the YARP_LIBRARIES set by the first call to find_package(YARP)
+set(${EXEC_TARGET_NAME}_YARP_LIBRARIES)
+
 # mandatory use of these packages
 find_package(YARP 3.0.101 REQUIRED COMPONENTS 
                                             math 
@@ -17,11 +21,15 @@ find_package(YARP 3.0.101 REQUIRED COMPONENTS
                                             pcl 
                                             idl_tools
 )
+list(APPEND ${EXEC_TARGET_NAME}_YARP_LIBRARIES ${YARP_LIBRARIES})
+
+find_package(ICUBcontrib REQUIRED)
+list(APPEND ${EXEC_TARGET_NAME}_YARP_LIBRARIES ${YARP_LIBRARIES})
+list(REMOVE_DUPLICATES ${EXEC_TARGET_NAME}_YARP_LIBRARIES)
 
 # finding the yarp pcl component already implies finding pcl. 
 # pcl cmake is broken and the linking crashes if find_package is called multiple times.
 #find_package(PCL 1.2 REQUIRED)
-find_package(ICUBcontrib REQUIRED)
 
 # add PCL library
 include_directories(${PCL_INCLUDE_DIRS})
@@ -52,7 +60,7 @@ add_executable(${EXEC_TARGET_NAME}
 )
 
 target_link_libraries(${EXEC_TARGET_NAME} 
-                                            ${YARP_LIBRARIES}
+                                            ${${EXEC_TARGET_NAME}_YARP_LIBRARIES}
                                             ${PCL_LIBRARIES}
 )
 
