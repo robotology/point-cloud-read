@@ -9,19 +9,24 @@ set(EXEC_TARGET_NAME "point-cloud-read")
 set(${EXEC_TARGET_NAME}_THRIFT src/idl.thrift)
 set(${EXEC_TARGET_NAME}_SRC src/main.cpp)
 
-# mandatory use of these packages
-find_package(YARP 3.0.101 REQUIRED COMPONENTS 
-                                            math 
-                                            OS 
-                                            sig 
-                                            pcl 
-                                            idl_tools
-)
 
 # finding the yarp pcl component already implies finding pcl. 
 # pcl cmake is broken and the linking crashes if find_package is called multiple times.
 #find_package(PCL 1.2 REQUIRED)
+# finding ICUBcontrib before YARP will NOT include pcl!
 find_package(ICUBcontrib REQUIRED)
+
+# mandatory use of these packages
+find_package(YARP 3.0.101 REQUIRED COMPONENTS 
+                                            math 
+                                            OS 
+                                            sig
+                                            dev 
+                                            pcl 
+                                            idl_tools
+)
+
+
 
 # add PCL library
 include_directories(${PCL_INCLUDE_DIRS})
