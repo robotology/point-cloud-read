@@ -360,7 +360,7 @@ protected:
 
     }
 
-    bool retrieveObjectPointCloud(PointCloud<DataXYZRGBA> &objectPointCloud, const string &object)
+    bool retrieveObjectPointCloudFromName(PointCloud<DataXYZRGBA> &objectPointCloud, const string &object)
     {
         //  get object bounding box given object name
 
@@ -371,18 +371,67 @@ protected:
             int width   = abs(bb_bot_right(0) - bb_top_left(0)) + 1;
             int height  = abs(bb_bot_right(1) - bb_top_left(1)) + 1;
 
+            Vector center_bb(2);
+            center_bb(0) = bb_top_left(0) + width/2;
+            center_bb(1) = bb_top_left(1) + height/2;
+            
+            return this->retrieveObjectPointCloudFromImagePosition(objectPointCloud, center_bb);
+        }
+        else
+        {
+            yError() << "retrieveObjectPointCloudFromName: Could not retrieve bounding box for object " << object;
+            return false;
+        }
+    }
+
+    bool retrieveObjectPointCloudFrom3DPosition(PointCloud<DataXYZRGBA> &objectPointCloud, const Vector &position3D)
+    {
+        if(position3D.size() == 3)
+        {
+            //  get projection of point in image from SFM
+            //  command message format: [cart2stereo X Y Z]
+            Bottle cmd, reply;
+            cmd.addString("cart2stereo");
+            cmd.addDouble(position3D(0));
+            cmd.addDouble(position3D(1));
+            cmd.addDouble(position3D(2));
+
+            outCommandSFM.write(cmd, reply);
+
+            if (reply.size() >=2)
+            {
+                Vector imagePosition(2);
+                imagePosition(0) = reply.get(0).asDouble();
+                imagePosition(1) = reply.get(1).asDouble();
+
+                return this->retrieveObjectPointCloudFromImagePosition(objectPointCloud, imagePosition);
+            }
+            else
+            {
+                yError() << "retrieveObjectPointCloudFrom3DPosition: Could not retrieve projection of 3D point in image plane";
+                return false;
+            }
+        }
+        else
+        {
+            yError() << "retrieveObjectPointCloudFrom3DPosition: Invalid dimension of object image position input vector";
+            return false;
+        }
+    }
+
+    bool retrieveObjectPointCloudFromImagePosition(PointCloud<DataXYZRGBA> &objectPointCloud, const Vector &objectImagePosition)
+    {
+        if(objectImagePosition.size() == 2)
+        {
             //  get list of points that belong to the object from lbpextract
             //  command message format: [get_component_around x y]
-            int center_bb_x = bb_top_left(0) + width/2;
-            int center_bb_y = bb_top_left(1) + (bb_bot_right(1) - bb_top_left(1))/2;
-
             Bottle cmdSeg, replySeg;
             cmdSeg.addString("get_component_around");
-            cmdSeg.addInt(center_bb_x);
-            cmdSeg.addInt(center_bb_y);
+            cmdSeg.addInt(objectImagePosition(0));
+            cmdSeg.addInt(objectImagePosition(1));
 
             if (!outCommandSegm.write(cmdSeg,replySeg)){
-                yError() << "Could not write to segmentation RPC port";
+                yError() << "retrieveObjectPointCloudFromImagePosition: Could not write to segmentation RPC port";
                 return false;
             }
 
@@ -391,7 +440,7 @@ protected:
             //  lbpExtract replies with a list of points
             if (replySeg.size() < 1)
                 {
-                yError() << "Empty point list retrieved from segmentation module!" ;
+                yError() << "retrieveObjectPointCloudFromImagePosition: Empty point list retrieved from segmentation module!" ;
                 return false;
                 }
 
@@ -417,7 +466,7 @@ protected:
 
                 if (!outCommandSFM.write(cmdSFM, replySFM))
                 {
-                    yError() << "Could not write to SFM RPC port";
+                    yError() << "retrieveObjectPointCloudFromImagePosition: Could not write to SFM RPC port";
                     return false;
                 }
 
@@ -468,14 +517,14 @@ protected:
             }
             else
             {
-                yError() << "Empty point cloud retrieved for object " << object;
+                yError() << "retrieveObjectPointCloudFromImagePosition: Empty point cloud retrieved around image point " << objectImagePosition(0) << " " << objectImagePosition(1);
                 return false;
             }
 
         }
         else
         {
-            yError() << "Could not retrieve bounding box for object " << object;
+            yError() << "retrieveObjectPointCloudFromImagePosition: Invalid dimension of object image position input vector";
             return false;
         }
     }
@@ -485,7 +534,7 @@ protected:
         //  retrieve object point cloud
         PointCloud<DataXYZRGBA> &pointCloud = outPort.prepare();
 
-        if (retrieveObjectPointCloud(pointCloud, object))
+        if (retrieveObjectPointCloudFromName(pointCloud, object))
         {
             //  prepare the command to sent to superquadric-model
             Bottle &cmdSQM = outBottlePointCloud.prepare();
@@ -631,7 +680,7 @@ protected:
 
         PointCloud<DataXYZRGBA> yarpCloud;
 
-        if (retrieveObjectPointCloud(yarpCloud, object))
+        if (retrieveObjectPointCloudFromName(yarpCloud, object))
         {
             //  dump point cloud to file
             string dumpFileName = object + "_" + baseDumpFileName;
@@ -680,7 +729,58 @@ protected:
 
         PointCloud<DataXYZRGBA> retrievedPointCloud;
         retrievedPointCloud.clear();
-        retrieveObjectPointCloud(retrievedPointCloud, object);
+        retrieveObjectPointCloudFromName(retrievedPointCloud, object);
+
+        operationMode = backupOperationMode;
+
+        yDebug() << "Retrieved " << retrievedPointCloud.size() << "points.";
+
+        Bottle reply = retrievedPointCloud.toBottle();
+
+        return reply;
+
+    }
+
+    Bottle get_point_cloud_from_3D_position(double x, double y, double z) override
+    {
+        LockGuard lg(mutex);
+
+        //  log previous operation mode
+        OpMode backupOperationMode = operationMode;
+        operationMode = OpMode::OP_MODE_STREAM_ONE;
+
+        PointCloud<DataXYZRGBA> retrievedPointCloud;
+        retrievedPointCloud.clear();
+        Vector position(3);
+        position(0) = x;
+        position(1) = y;
+        position(2) = z;
+        retrieveObjectPointCloudFrom3DPosition(retrievedPointCloud, position);
+
+        operationMode = backupOperationMode;
+
+        yDebug() << "Retrieved " << retrievedPointCloud.size() << "points.";
+
+        Bottle reply = retrievedPointCloud.toBottle();
+
+        return reply;
+
+    }
+
+    Bottle get_point_cloud_from_image_position(double u, double v) override
+    {
+        LockGuard lg(mutex);
+
+        //  log previous operation mode
+        OpMode backupOperationMode = operationMode;
+        operationMode = OpMode::OP_MODE_STREAM_ONE;
+
+        PointCloud<DataXYZRGBA> retrievedPointCloud;
+        retrievedPointCloud.clear();
+        Vector position(2);
+        position(0) = u;
+        position(1) = v;
+        retrieveObjectPointCloudFromImagePosition(retrievedPointCloud, position);
 
         operationMode = backupOperationMode;
 
