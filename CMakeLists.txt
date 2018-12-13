@@ -17,7 +17,8 @@ set(${EXEC_TARGET_NAME}_YARP_LIBRARIES)
 find_package(YARP 3.0.101 REQUIRED COMPONENTS 
                                             math 
                                             OS 
-                                            sig 
+                                            sig
+                                            dev 
                                             pcl 
                                             idl_tools
 )
@@ -26,10 +27,6 @@ list(APPEND ${EXEC_TARGET_NAME}_YARP_LIBRARIES ${YARP_LIBRARIES})
 find_package(ICUBcontrib REQUIRED)
 list(APPEND ${EXEC_TARGET_NAME}_YARP_LIBRARIES ${YARP_LIBRARIES})
 list(REMOVE_DUPLICATES ${EXEC_TARGET_NAME}_YARP_LIBRARIES)
-
-# finding the yarp pcl component already implies finding pcl. 
-# pcl cmake is broken and the linking crashes if find_package is called multiple times.
-#find_package(PCL 1.2 REQUIRED)
 
 # add PCL library
 include_directories(${PCL_INCLUDE_DIRS})
