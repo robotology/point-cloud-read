@@ -371,11 +371,11 @@ protected:
             int width   = abs(bb_bot_right(0) - bb_top_left(0)) + 1;
             int height  = abs(bb_bot_right(1) - bb_top_left(1)) + 1;
 
-            Vector imagePosition(2);
-            imagePosition(0) = bb_top_left(0) + width/2;
-            imagePosition(1) = bb_top_left(1) + height/2;
-
-            return this->retrieveObjectPointCloudFromImagePosition(objectPointCloud, imagePosition);
+            Vector center_bb(2);
+            center_bb(0) = bb_top_left(0) + width/2;
+            center_bb(1) = bb_top_left(1) + height/2;
+            
+            return this->retrieveObjectPointCloudFromImagePosition(objectPointCloud, center_bb);
         }
         else
         {
