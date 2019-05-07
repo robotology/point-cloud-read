@@ -69,11 +69,11 @@ public:
     Vector toYarpVector()
     {
         Vector point_vec(3);
-        
+
         point_vec(0) = x;
         point_vec(1) = y;
         point_vec(2) = z;
-        
+
         return point_vec;
     }
 
@@ -144,10 +144,16 @@ protected:
         //  command message format: [ask] (("prop0" "<" <val0>) || ("prop1" ">=" <val1>) ...)
         Bottle cmd, reply;
         cmd.addVocab(Vocab::encode("ask"));
-        Bottle &content = cmd.addList().addList();
-        content.addString("name");
-        content.addString("==");
-        content.addString(objName);
+        Bottle &content = cmd.addList();
+        Bottle &cond_1=content.addList();
+        cond_1.addString("entity");
+        cond_1.addString("==");
+        cond_1.addString("object");
+        content.addString("&&");
+        Bottle &cond_2=content.addList();
+        cond_2.addString("name");
+        cond_2.addString("==");
+        cond_2.addString(objName);
         outCommandOPC.write(cmd,reply);
 
         //  reply message format: [nack]; [ack] ("id" (<num0> <num1> ...))
@@ -250,9 +256,9 @@ protected:
                 cmdSFM.addString("Points");
 
                 yDebug() << "Retrieved " << pointList->size() << " 2D points.";
-                
+
                 for (int point_idx=0; point_idx < pointList->size(); point_idx++)
-                {  
+                {
                 Bottle *point2D = pointList->get(point_idx).asList();
                 cmdSFM.addInt(point2D->get(0).asInt());
                 cmdSFM.addInt(point2D->get(1).asInt());
@@ -298,7 +304,7 @@ protected:
                 }
 
                 yInfo() << "Point cloud retrieved: " << objectPointCloud.size() << " points stored.";
-                
+
                 return true;
             }
             else
@@ -306,7 +312,7 @@ protected:
                 yError() << "Empty point cloud retrieved for object " << objectToFind;
                 return false;
             }
-            
+
         }
         else
         {
@@ -374,7 +380,7 @@ protected:
             Vector center_bb(2);
             center_bb(0) = bb_top_left(0) + width/2;
             center_bb(1) = bb_top_left(1) + height/2;
-            
+
             return this->retrieveObjectPointCloudFromImagePosition(objectPointCloud, center_bb);
         }
         else
@@ -852,7 +858,7 @@ protected:
 
         return reply;
 
-    }    
+    }
 
     bool set_period(const double modulePeriod) override
     {
