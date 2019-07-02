@@ -874,11 +874,11 @@ public:
 
     bool configure(ResourceFinder &rf) override
     {
-        moduleName = "pointCloudRead";
-        baseDumpFileName = "point_cloud";
+        moduleName = rf.check("moduleName",Value("pointCloudRead")).asString();
+        baseDumpFileName = rf.check("baseDumpFileName",Value("point_cloud")).asString();
 
         //  default update period is 1 second
-        moduleUpdatePeriod = 1.0;
+        moduleUpdatePeriod = rf.check("moduleUpdatePeriod",Value(1.0)).asDouble();
 
         bool okOpen = true;
 
