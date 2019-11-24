@@ -28,7 +28,6 @@ endif()
 find_package(YARP 3.0.101 REQUIRED
                           COMPONENTS
                           OS
-                          math
                           sig
                           ${YARP_PCL_COMPONENT}
 )
@@ -68,7 +67,6 @@ target_link_libraries(${EXEC_TARGET_NAME}
                       YARP::YARP_OS
                       YARP::YARP_init
                       YARP::YARP_sig
-                      YARP::YARP_math
 )
 
 if (USE_PCL)

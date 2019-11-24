@@ -7,11 +7,16 @@
  *
  */
 
-
-#include <yarp/os/all.h>
-#include <yarp/sig/all.h>
-#include <yarp/dev/all.h>
-#include <yarp/math/Math.h>
+#include <yarp/os/BufferedPort.h>
+#include <yarp/os/LockGuard.h>
+#include <yarp/os/Mutex.h>
+#include <yarp/os/ResourceFinder.h>
+#include <yarp/os/RFModule.h>
+#include <yarp/os/RpcClient.h>
+#include <yarp/os/RpcServer.h>
+#include <yarp/sig/Image.h>
+#include <yarp/sig/Matrix.h>
+#include <yarp/sig/PointCloud.h>
 
 #ifdef POINTCLOUDREAD_USES_PCL
 #include <yarp/pcl/Pcl.h>
@@ -30,7 +35,6 @@
 using namespace std;
 using namespace yarp::os;
 using namespace yarp::sig;
-using namespace yarp::math;
 
 /**************************************************************/
 
