@@ -12,7 +12,10 @@
 #include <yarp/sig/all.h>
 #include <yarp/dev/all.h>
 #include <yarp/math/Math.h>
+
+#ifdef POINTCLOUDREAD_USES_PCL
 #include <yarp/pcl/Pcl.h>
+#endif
 
 #include <string>
 #include <iostream>
@@ -661,6 +664,7 @@ protected:
 
     }
 
+#ifdef POINTCLOUDREAD_USES_PCL
     int dumpToPCDFile(const string &filename, const PointCloud<DataXYZRGBA> &pointCloud)
     {
 
@@ -681,6 +685,7 @@ protected:
         return yarp::pcl::savePCD< yarp::sig::DataXYZRGBA, pcl::PointXYZRGBA>(filename_n_ext, pointCloud);
 
     }
+#endif
 
     bool dumpPointCloud(const string &format, const string &object){
 
@@ -704,6 +709,7 @@ protected:
                 else
                     yError() << "Dump failed!";
             }
+#ifdef POINTCLOUDREAD_USES_PCL
             else if (string_format_lowercase.compare("pcd") == 0)
             {
                 if (dumpToPCDFile(dumpFileName, yarpCloud) == 0)
@@ -715,6 +721,7 @@ protected:
                 else
                     yError() << "Dump failed!";
             }
+#endif
             else
                 yError() << "Invalid dump format.";
         }
