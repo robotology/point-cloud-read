@@ -213,7 +213,7 @@ protected:
             }
         }
 
-        yError() << "RPC to OPC returned unexpected reply";
+        yError() << "retrieveObjectBoundingBox: RPC to OPC returned unexpected reply";
         return false;
 
     }
@@ -240,16 +240,16 @@ protected:
             cmdSeg.addInt(center_bb_y);
 
             if (!outCommandSegm.write(cmdSeg,replySeg)){
-                yError() << "Could not write to segmentation RPC port";
+                yError() << "retrieveObjectPointCloud: Could not write to segmentation RPC port";
                 return false;
             }
 
-            yDebug() << "Segmented point list obtained from segmentation module";
+            yDebug() << "retrieveObjectPointCloud: Segmented point list obtained from segmentation module";
 
             //  lbpExtract replies with a list of points
             if (replySeg.size() < 1)
                 {
-                yError() << "Empty point list retrieved from segmentation module!" ;
+                yError() << "retrieveObjectPointCloud: Empty point list retrieved from segmentation module!" ;
                 return false;
                 }
 
@@ -262,7 +262,7 @@ protected:
                 Bottle cmdSFM, replySFM;
                 cmdSFM.addString("Points");
 
-                yDebug() << "Retrieved " << pointList->size() << " 2D points.";
+                yDebug() << "retrieveObjectPointCloud: Retrieved " << pointList->size() << " 2D points.";
 
                 for (int point_idx=0; point_idx < pointList->size(); point_idx++)
                 {
@@ -271,25 +271,25 @@ protected:
                 cmdSFM.addInt(point2D->get(1).asInt());
                 }
 
-                //yDebug() << "Query: " << cmdSFM.toString();
+                //yDebug() << "retrieveObjectPointCloud: Query: " << cmdSFM.toString();
 
                 if (!outCommandSFM.write(cmdSFM, replySFM))
                 {
-                    yError() << "Could not write to SFM RPC port";
+                    yError() << "retrieveObjectPointCloud: Could not write to SFM RPC port";
                     return false;
                 }
 
-                yDebug() << "3D point list obtained from SFM";
+                yDebug() << "retrieveObjectPointCloud: 3D point list obtained from SFM";
 
                 //  acquire image from camera input
                 ImageOf<PixelRgb> *inCamImg = inImgPort.read();
 
-                yDebug() << "Image obtained from camera stream";
+                yDebug() << "retrieveObjectPointCloud: Image obtained from camera stream";
 
                 //  empty point cloud
                 objectPointCloud.clear();
 
-                yDebug() << "Reply from SFM obtained. Cycling through " << pointList->size() << " 3D points...";
+                yDebug() << "retrieveObjectPointCloud: Reply from SFM obtained. Cycling through " << pointList->size() << " 3D points...";
 
                 for (int point_idx = 0; point_idx < replySFM.size()/3; point_idx++)
                 {
@@ -310,20 +310,20 @@ protected:
                     objectPointCloud.push_back(Point3DRGB(x, y, z, point_rgb.r, point_rgb.g, point_rgb.b));
                 }
 
-                yInfo() << "Point cloud retrieved: " << objectPointCloud.size() << " points stored.";
+                yInfo() << "retrieveObjectPointCloud: Point cloud retrieved: " << objectPointCloud.size() << " points stored.";
 
                 return true;
             }
             else
             {
-                yError() << "Empty point cloud retrieved for object " << objectToFind;
+                yError() << "retrieveObjectPointCloud: Empty point cloud retrieved for object " << objectToFind;
                 return false;
             }
 
         }
         else
         {
-            yError() << "Could not retrieve bounding box for object " << objectToFind;
+            yError() << "retrieveObjectPointCloud: Could not retrieve bounding box for object " << objectToFind;
             return false;
         }
     }
@@ -367,7 +367,7 @@ protected:
         }
         else
         {
-            yError() << "Could not retrieve bounding box for object " << objectToFind;
+            yError() << "retrieveObjectPointCloud: Could not retrieve bounding box for object " << objectToFind;
             return false;
         }
 
@@ -448,7 +448,7 @@ protected:
                 return false;
             }
 
-            yDebug() << "Segmented point list obtained from segmentation module";
+            yDebug() << "retrieveObjectPointCloudFromImagePosition: Segmented point list obtained from segmentation module";
 
             //  lbpExtract replies with a list of points
             if (replySeg.size() < 1)
@@ -466,7 +466,7 @@ protected:
                 Bottle cmdSFM, replySFM;
                 cmdSFM.addString("Points");
 
-                yDebug() << "Retrieved " << pointList->size() << " 2D points.";
+                yDebug() << "retrieveObjectPointCloudFromImagePosition: Retrieved " << pointList->size() << " 2D points.";
 
                 for (int point_idx=0; point_idx < pointList->size(); point_idx++)
                 {
@@ -475,7 +475,7 @@ protected:
                 cmdSFM.addInt(point2D->get(1).asInt());
                 }
 
-                //yDebug() << "Query: " << cmdSFM.toString();
+                //yDebug() << "retrieveObjectPointCloudFromImagePosition: Query: " << cmdSFM.toString();
 
                 if (!outCommandSFM.write(cmdSFM, replySFM))
                 {
@@ -483,17 +483,17 @@ protected:
                     return false;
                 }
 
-                yDebug() << "3D point list obtained from SFM";
+                yDebug() << "retrieveObjectPointCloudFromImagePosition: 3D point list obtained from SFM";
 
                 //  acquire image from camera input
                 ImageOf<PixelRgb> *inCamImg = inImgPort.read();
 
-                yDebug() << "Image obtained from camera stream";
+                yDebug() << "retrieveObjectPointCloudFromImagePosition: Image obtained from camera stream";
 
                 //  empty point cloud
                 objectPointCloud.clear();
 
-                yDebug() << "Reply from SFM obtained. Cycling through " << pointList->size() << " 3D points...";
+                yDebug() << "retrieveObjectPointCloudFromImagePosition: Reply from SFM obtained. Cycling through " << pointList->size() << " 3D points...";
 
                 for (int point_idx = 0; point_idx < replySFM.size()/3; point_idx++)
                 {
@@ -524,7 +524,7 @@ protected:
                     objectPointCloud.push_back(point3D);
                 }
 
-                yInfo() << "Point cloud retrieved: " << objectPointCloud.size() << " points stored.";
+                yInfo() << "retrieveObjectPointCloudFromImagePosition: Point cloud retrieved: " << objectPointCloud.size() << " points stored.";
 
                 return true;
             }
@@ -571,7 +571,7 @@ protected:
         }
         else
         {
-            yError() << "Could not retrieve point cloud for object " << object;
+            yError() << "streamSinglePointCloud: Could not retrieve point cloud for object " << object;
             return false;
         }
     }
@@ -706,31 +706,31 @@ protected:
             {
                 if (dumpToOFFFile(dumpFileName, yarpCloud) == 0)
                 {
-                    yInfo() << "Dumped point cloud in OFF format.";
+                    yInfo() << "dumpPointCloud: Dumped point cloud in OFF format.";
                     return true;
 
                 }
                 else
-                    yError() << "Dump failed!";
+                    yError() << "dumpPointCloud: Dump failed!";
             }
 #ifdef POINTCLOUDREAD_USES_PCL
             else if (string_format_lowercase.compare("pcd") == 0)
             {
                 if (dumpToPCDFile(dumpFileName, yarpCloud) == 0)
                 {
-                    yInfo() << "Dumped point cloud in PCD format.";
+                    yInfo() << "dumpPointCloud: Dumped point cloud in PCD format.";
                     return true;
 
                 }
                 else
-                    yError() << "Dump failed!";
+                    yError() << "dumpPointCloud: Dump failed!";
             }
 #endif
             else
-                yError() << "Invalid dump format.";
+                yError() << "dumpPointCloud: Invalid dump format.";
         }
         else
-            yError() << "Could not retrieve object point cloud";
+            yError() << "dumpPointCloud: Could not retrieve object point cloud";
 
         return false;
 
@@ -750,7 +750,7 @@ protected:
 
         operationMode = backupOperationMode;
 
-        yDebug() << "Retrieved " << retrievedPointCloud.size() << "points.";
+        yDebug() << "get_point_cloud: Retrieved " << retrievedPointCloud.size() << "points.";
 
         Bottle reply = retrievedPointCloud.toBottle();
 
@@ -776,7 +776,7 @@ protected:
 
         operationMode = backupOperationMode;
 
-        yDebug() << "Retrieved " << retrievedPointCloud.size() << "points.";
+        yDebug() << "get_point_cloud_from_3D_position: Retrieved " << retrievedPointCloud.size() << "points.";
 
         Bottle reply = retrievedPointCloud.toBottle();
 
@@ -801,7 +801,7 @@ protected:
 
         operationMode = backupOperationMode;
 
-        yDebug() << "Retrieved " << retrievedPointCloud.size() << "points.";
+        yDebug() << "get_point_cloud_from_image_position: Retrieved " << retrievedPointCloud.size() << "points.";
 
         Bottle reply = retrievedPointCloud.toBottle();
 
@@ -875,7 +875,7 @@ protected:
     {
         moduleUpdatePeriod = modulePeriod;
 
-        yInfo() << "Update period changed to" << moduleUpdatePeriod << "[s]";
+        yInfo() << "set_period: Update period changed to" << moduleUpdatePeriod << "[s]";
 
         return true;
 
@@ -885,11 +885,11 @@ public:
 
     bool configure(ResourceFinder &rf) override
     {
-        moduleName = "pointCloudRead";
-        baseDumpFileName = "point_cloud";
+        moduleName = rf.check("moduleName",Value("pointCloudRead")).asString();
+        baseDumpFileName = rf.check("baseDumpFileName",Value("point_cloud")).asString();
 
         //  default update period is 1 second
-        moduleUpdatePeriod = 1.0;
+        moduleUpdatePeriod = rf.check("moduleUpdatePeriod",Value(1.0)).asDouble();
 
         bool okOpen = true;
 
@@ -904,7 +904,7 @@ public:
 
         if (!okOpen)
         {
-            yError() << "Unable to open ports!";
+            yError() << "configure: Unable to open ports!";
             return false;
         }
 
