@@ -27,6 +27,7 @@
 #include <fstream>
 #include <deque>
 #include <algorithm>
+#include <vector>
 
 #include <climits>
 
@@ -114,6 +115,7 @@ protected:
         OP_MODE_STREAM_ONE,
         OP_MODE_STREAM_MANY,
         OP_MODE_DUMP_ONE,
+        OP_MODE_DUMP_SCENE,
         OP_MODE_NONE
     };
 
@@ -542,6 +544,76 @@ protected:
         }
     }
 
+    bool retrieveScenePointCloud(PointCloud<DataXYZRGBA> &objectPointCloud)
+    {
+        // prepare list of 2D points for SFM
+        Bottle cmdSFM, replySFM;
+        cmdSFM.addString("Points");
+
+        std::vector<std::pair<int, int>> list_points;
+
+        for (std::size_t u=0; u<320; u++)
+        {
+            for (std::size_t v=0; v<240; v++)
+            {
+                cmdSFM.addInt(u);
+                cmdSFM.addInt(v);
+
+                // list of points required to get the color afterwards
+                list_points.push_back(std::make_pair(u, v));
+            }
+        }
+
+        // fetch 3D points
+        if (!outCommandSFM.write(cmdSFM, replySFM))
+        {
+            yError() << "Could not write to SFM RPC port";
+            return false;
+        }
+
+        yDebug() << "3D point list obtained from SFM";
+
+        //  acquire image from camera input
+        ImageOf<PixelRgb> *inCamImg = inImgPort.read();
+
+        yDebug() << "Image obtained from camera stream";
+
+        //  empty point cloud
+        objectPointCloud.clear();
+
+        yDebug() << "Reply from SFM obtained.";
+
+        for (std::size_t i=0; i<list_points.size(); i++)
+        {
+            double x = replySFM.get(i*3).asDouble();
+            double y = replySFM.get(i*3+1).asDouble();
+            double z = replySFM.get(i*3+2).asDouble();
+
+            //  0 0 0 points are invalid and must be discarded
+            if (x==0.0 && y==0.0 && z==0.0)
+                continue;
+
+            //  fetch rgb from image according to 2D coordinates
+            PixelRgb point_rgb = inCamImg->pixel(list_points.at(i).first, list_points.at(i).second);
+
+            DataXYZRGBA point3D;
+            point3D.x = x;
+            point3D.y = y;
+            point3D.z = z;
+            point3D.r = point_rgb.r;
+            point3D.g = point_rgb.g;
+            point3D.b = point_rgb.b;
+            point3D.a = UCHAR_MAX;
+
+            objectPointCloud.push_back(point3D);
+        }
+
+        yInfo() << "Point cloud retrieved: " << objectPointCloud.size() << " points stored.";
+
+        return true;
+    }
+
+
     bool streamSinglePointCloud(const string &object)
     {
         //  retrieve object point cloud
@@ -691,14 +763,25 @@ protected:
     }
 #endif
 
-    bool dumpPointCloud(const string &format, const string &object){
+    bool dumpPointCloud(const string &format, const string &object = ""){
 
         PointCloud<DataXYZRGBA> yarpCloud;
 
-        if (retrieveObjectPointCloudFromName(yarpCloud, object))
+        bool valid_point_cloud = false;
+
+        if (object.empty())
+            valid_point_cloud = retrieveScenePointCloud(yarpCloud);
+        else
+            valid_point_cloud = retrieveObjectPointCloudFromName(yarpCloud, object);
+
+        if (valid_point_cloud)
         {
             //  dump point cloud to file
-            string dumpFileName = object + "_" + baseDumpFileName;
+            string dumpFileName;
+            if (object.empty())
+                dumpFileName = "scene_" + baseDumpFileName;
+            else
+                dumpFileName = object + "_" + baseDumpFileName;
 
             string string_format_lowercase = format;
             transform(string_format_lowercase.begin(), string_format_lowercase.end(), string_format_lowercase.begin(), ::tolower);
@@ -730,7 +813,7 @@ protected:
                 yError() << "Invalid dump format.";
         }
         else
-            yError() << "Could not retrieve object point cloud";
+            yError() << "Could not retrieve the point cloud";
 
         return false;
 
@@ -862,6 +945,23 @@ protected:
         operationMode = OpMode::OP_MODE_DUMP_ONE;
 
         bool reply = dumpPointCloud(format, object);
+
+        operationMode = backupOperationMode;
+
+        mutex.unlock();
+
+        return reply;
+
+    }
+
+    bool dump_scene(const string &format) override
+    {
+        mutex.lock();
+
+        OpMode backupOperationMode = operationMode;
+        operationMode = OpMode::OP_MODE_DUMP_SCENE;
+
+        bool reply = dumpPointCloud(format);
 
         operationMode = backupOperationMode;
 
